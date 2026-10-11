@@ -1,0 +1,21 @@
+# 环境
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# 数据：原始数据与构建出的库都不入库（体积大、可复现）
+data/raw/
+data/*.duckdb
+data/*.duckdb.wal
+
+# 运行期产物（日志、预算记录）
+logs/
+*.log
+data/llm_usage.jsonl
+
+# 机密
+.env
+.env.*
+!.env.example

@@ -1,0 +1,25 @@
+{
+  "version": "v0-draft",
+  "split": "dev",
+  "note": "M0 骨架用的最小任务集；正式任务集在 M3 构造，构造人=作者",
+  "tasks": [
+    {
+      "task_id": "T-001",
+      "question": "最近三个月销售额为什么下降？按国家看",
+      "expected": {"type": "attribution", "key_facts": ["最大贡献国家"]},
+      "provenance": "synthetic_with_basis#author"
+    },
+    {
+      "task_id": "T-002",
+      "question": "各个国家的退货情况怎么样",
+      "expected": {"type": "explore", "key_facts": ["退货集中在哪些国家"]},
+      "provenance": "synthetic_with_basis#author"
+    },
+    {
+      "task_id": "T-003",
+      "question": "最近情况怎么样",
+      "expected": {"type": "clarify", "key_facts": ["应触发澄清"]},
+      "provenance": "synthetic_with_basis#author"
+    }
+  ]
+}

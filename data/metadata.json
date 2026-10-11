@@ -1,0 +1,173 @@
+{
+  "source_file": "Online Retail.xlsx",
+  "built_by": "openpyxl_csv",
+  "note": "默认不走 DuckDB excel 扩展：本机代理下该扩展下载失败（HTTP 302），改用 openpyxl→CSV→read_csv_auto",
+  "objects": [
+    {
+      "name": "raw_online_retail",
+      "type": "BASE TABLE"
+    },
+    {
+      "name": "v_returns",
+      "type": "VIEW"
+    },
+    {
+      "name": "v_sales",
+      "type": "VIEW"
+    }
+  ],
+  "columns": {
+    "raw_online_retail": [
+      {
+        "column": "invoice_no",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "stock_code",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "description",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "quantity",
+        "dtype": "BIGINT"
+      },
+      {
+        "column": "invoice_ts",
+        "dtype": "TIMESTAMP"
+      },
+      {
+        "column": "unit_price",
+        "dtype": "DOUBLE"
+      },
+      {
+        "column": "customer_id",
+        "dtype": "BIGINT"
+      },
+      {
+        "column": "country",
+        "dtype": "VARCHAR"
+      }
+    ],
+    "v_returns": [
+      {
+        "column": "invoice_no",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "stock_code",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "description",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "quantity",
+        "dtype": "BIGINT"
+      },
+      {
+        "column": "invoice_ts",
+        "dtype": "TIMESTAMP"
+      },
+      {
+        "column": "unit_price",
+        "dtype": "DOUBLE"
+      },
+      {
+        "column": "customer_id",
+        "dtype": "BIGINT"
+      },
+      {
+        "column": "country",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "is_return",
+        "dtype": "BOOLEAN"
+      },
+      {
+        "column": "is_cancelled",
+        "dtype": "BOOLEAN"
+      },
+      {
+        "column": "line_revenue",
+        "dtype": "DOUBLE"
+      }
+    ],
+    "v_sales": [
+      {
+        "column": "invoice_no",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "stock_code",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "description",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "quantity",
+        "dtype": "BIGINT"
+      },
+      {
+        "column": "invoice_ts",
+        "dtype": "TIMESTAMP"
+      },
+      {
+        "column": "unit_price",
+        "dtype": "DOUBLE"
+      },
+      {
+        "column": "customer_id",
+        "dtype": "BIGINT"
+      },
+      {
+        "column": "country",
+        "dtype": "VARCHAR"
+      },
+      {
+        "column": "is_return",
+        "dtype": "BOOLEAN"
+      },
+      {
+        "column": "is_cancelled",
+        "dtype": "BOOLEAN"
+      },
+      {
+        "column": "line_revenue",
+        "dtype": "DOUBLE"
+      }
+    ]
+  },
+  "allowed_views": [
+    "v_sales",
+    "v_returns"
+  ],
+  "profile": {
+    "rows": 541909,
+    "ts_min": "2010-12-01 08:26:00",
+    "ts_max": "2011-12-09 12:50:00",
+    "countries": 38,
+    "stock_codes": 4070,
+    "customers": 4372,
+    "missing_customer_rows": 135080,
+    "missing_customer_ratio": 0.2493,
+    "return_lines": 10624,
+    "revenue_total": 9747747.93
+  },
+  "caliber": {
+    "grain": "一行 = 一张发票里的一行商品（invoice line），不是订单级",
+    "line_revenue": "quantity * unit_price，**含退货为负**；做汇总时不要再次过滤符号",
+    "is_return": "quantity < 0；退货不计入正向销售额时可加 WHERE NOT is_return",
+    "is_cancelled": "发票号以 C 开头（取消单），与 is_return 高度相关但不完全等同",
+    "customer_id": "缺失率约 25%，**客户维度聚合前必须显式说明样本量**",
+    "time_range": "2010-12-01 ~ 2011-12-09（约 1 年），跨年比较要考虑季节性",
+    "no_cost_field": "数据集没有成本/毛利字段，因此**不能做利润归因**",
+    "country": "38 个国家/地区，'United Kingdom' 占绝大多数，跨国比较要报占比"
+  }
+}

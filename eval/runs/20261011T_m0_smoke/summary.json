@@ -1,0 +1,15 @@
+{
+  "tasks": 3,
+  "answered": 1,
+  "need_clarification": 2,
+  "errors": 0,
+  "answer_rate": 0.3333,
+  "trace_complete_rate": 0.3333,
+  "todo_metrics": [
+    "结论支持率",
+    "误判率(holdout)",
+    "边界降级正确率",
+    "无验证层/有验证层对照"
+  ],
+  "run_id": "3efb7215"
+}
