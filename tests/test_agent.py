@@ -151,6 +151,57 @@ def test_rule_path_carries_level_boundary_wording():
     assert "不支持因果结论" in caveats
 
 
+def _refusing_client(reason="因果推断超出能力边界"):
+    """返回"拒答计划"的假客户端，用来把链路逼进因果兜底。"""
+
+    class RefusingClient:
+        name = "fake"
+
+        def complete_json(self, system, user, max_tokens=900):
+            import json as _json
+
+            payload = {
+                "scope": "refuse",
+                "refuse_reason": reason,
+                "assumptions": [],
+                "steps": [],
+            }
+            return _json.dumps(
+                {"content": _json.dumps(payload, ensure_ascii=False), "cost_cny": 0}
+            )
+
+    return RefusingClient()
+
+
+def test_fallback_leads_with_boundary_then_facts(monkeypatch):
+    """P1-1：降级回答先写"不能回答什么"，再给替代分析，最后是限制。"""
+    from analytics_copilot import config
+
+    monkeypatch.setattr(config, "FORCE_STUB", False)
+    outcome = agent.analyze(
+        "商品最近三个月为什么销售额下降", _session(), client=_refusing_client()
+    )
+    claim = outcome["conclusion"].claim
+    assert claim.startswith("当前不能判断")
+    assert "基于现有数据可以确认" in claim
+    caveats = outcome["conclusion"].caveats
+    assert "不能证明因果" in " ".join(caveats)
+    # 商品维度必须带出描述，且提醒高度分散与编码语义
+    assert any("高度分散" in item for item in caveats)
+    assert any("stock_code" in item for item in caveats)
+
+
+def test_fallback_claims_stay_supported_for_numeric_stock_codes(monkeypatch):
+    """纯数字商品编码不能被验证层当成"没来源的数字断言"（v1.2 已知限制的兜底）。"""
+    from analytics_copilot import config
+
+    monkeypatch.setattr(config, "FORCE_STUB", False)
+    outcome = agent.analyze(
+        "商品最近三个月为什么销售额下降", _session(), client=_refusing_client()
+    )
+    assert outcome["verification"]["blocked"] == 0
+
+
 def test_causal_fallback_gives_checkable_facts_and_next_steps(monkeypatch):
     """兜底回答要给可核查事实、写清口径、给下一步问法，而不是只说"我不能回答"。"""
     from analytics_copilot import config
@@ -213,7 +264,7 @@ def test_default_dimension_is_declared():
     ctx = outcome["analysis_context"]
     assert ctx["dimension"] == "country"
     assert ctx["dimension_source"] == "default"
-    assert "未指定，按默认" in ctx["text"]
+    assert "你没有指定分析维度，本次默认按国家汇总" in ctx["text"]
 
 
 def test_explicit_dimension_is_declared_as_specified():

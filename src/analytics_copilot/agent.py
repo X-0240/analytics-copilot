@@ -151,13 +151,17 @@ def analysis_context(understanding, win):
     dimension_label = DIMENSION_LABELS.get(dimension, dimension)
     window_label = win.get("requested") or "全期"
     start, end = win["resolved_range"]
-    source_text = "问题中指定" if source == "explicit" else "未指定，按默认"
-    text = (
-        "分析口径：指标=%s；维度=%s（%s）；时间范围=%s（%s ~ %s）"
-        % (metric_label, dimension_label, source_text, window_label, start, end)
-    )
-    if source != "explicit":
-        text += "；可指定维度：国家 / 商品 / 客户"
+    if source == "explicit":
+        text = (
+            "分析口径：按问题中指定的%s汇总；指标=%s；时间范围=%s（%s ~ %s）"
+            % (dimension_label, metric_label, window_label, start, end)
+        )
+    else:
+        text = (
+            "分析口径：你没有指定分析维度，本次默认按%s汇总；指标=%s；"
+            "时间范围=%s（%s ~ %s）。想换维度（国家 / 商品 / 客户）直接说就行"
+            % (dimension_label, metric_label, window_label, start, end)
+        )
     return {
         "metric": metric,
         "metric_label": metric_label,
@@ -184,6 +188,11 @@ def plan(understanding, win=None):
         metric_expr = "SUM(%s)" % metric
         source = "v_sales"
     dimension = (understanding.dimensions or ["country"])[0]
+    # 商品维度只给编码会让人误以为是"产品名"，把视图里现成的 description 一起带出来
+    # （追加在最后，保持 0/1/2 三列语义不变：维度值 / 数值 / 占比）
+    extra_column = (
+        ", MAX(description) AS description" if dimension == "stock_code" else ""
+    )
     where = window.where_clause(win)
     filtered = (" WHERE " + where) if where else ""
     denominator = "SELECT SUM(line_revenue) FROM v_sales" + filtered
@@ -201,9 +210,9 @@ def plan(understanding, win=None):
             # 不加 LIMIT：占比合计要能对上 1；行数上限由工具层统一兜住
             "sql": (
                 "SELECT %s AS dimension_value, ROUND(SUM(line_revenue), 2) AS value, "
-                "ROUND(SUM(line_revenue) / (%s), 4) "
-                "AS share FROM v_sales%s GROUP BY 1 ORDER BY value DESC"
-                % (dimension, denominator, filtered)
+                "ROUND(SUM(line_revenue) / (%s), 4) AS share%s "
+                "FROM v_sales%s GROUP BY 1 ORDER BY value DESC"
+                % (dimension, denominator, extra_column, filtered)
             ),
         },
     ]
@@ -282,22 +291,30 @@ def _rule_path(question, understanding):
             }
         )
         if step["name"] == "维度贡献" and result.rows:
-            top_share = (result.rows[0][0], result.rows[0][2])
+            row = result.rows[0]
+            top_share = (row[0], row[2], row[3] if len(row) > 3 else "")
 
     risky = [item for item in checks if not item.ok]
     # 口径必须显式：SQL 用的窗口与答案写的窗口来自同一个对象
     caveats = [window.describe(win)] + [item.detail for item in risky]
     caveats.extend(understanding.assumptions)
     if top_share:
-        claim = "第一大贡献维度是 %s，占比 %.1f%%" % (
-            top_share[0],
-            (top_share[1] or 0) * 100,
+        label = (
+            "%s（%s）" % (top_share[0], _safe_label(top_share[2]))
+            if top_share[2]
+            else str(top_share[0])
         )
+        claim = "第一大贡献维度是 %s，占比 %.1f%%" % (label, (top_share[1] or 0) * 100)
     else:
         claim = "已给出总量趋势，未找到可比较的维度贡献"
     if top_share and top_share[1] is not None and top_share[1] < 0.5:
         caveats.append(
             "最大维度占比不足 50%，结论不能只看单一因素（可能存在更大量级因素）"
+        )
+    if top_share and top_share[2]:
+        caveats.append(
+            "商品维度以 stock_code 编码呈现，括号里是数据里的原始描述（未清洗，"
+            "可能出现邮费/费用/残次品等非普通商品的行）"
         )
     confidence = "low" if (caveats or risky) else "medium"
     rule_plan = plan(understanding, win)
@@ -405,6 +422,7 @@ def _llm_path(client, question, understanding, verify_layer=True, meter=None):
             )
     else:
         caveats.append(window.describe(win))
+    caveats.extend(_semantic_caveats(question, plan_obj))
     if any(item["truncated"] for item in evidence):
         caveats.append("至少一步结果被截断，结论可能不完整")
     claims = conclusion_obj["claims"]
@@ -517,18 +535,29 @@ def _causal_fallback(question, understanding, plan_obj):
     claims = _fallback_claims(executed, understanding)
     verdict = verifier.verify(question, {"steps": rule_steps}, executed, claims)
     caveats = [
-        "模型原判为拒答（%s），按 v1.1 因果类提问不允许直接拒答，已改为给出证据允许的层级"
-        % plan_obj["refuse_reason"]
+        "当前不能判断原因（本项目不做因果推断）：模型原判为拒答（%s）。"
+        "下面只给能被查询结果支持的事实与相关变化" % plan_obj["refuse_reason"]
     ]
     caveats.extend(verdict.caveats)
-    caveats.append(
-        window.describe(win)
-    )
+    caveats.append(window.describe(win))
     partial = _partial_month_caveat(executed, win)
     if partial:
         caveats.append(partial)
+    concentration = _concentration_caveat(executed)
+    if concentration:
+        caveats.append(concentration)
+    if any("description" in str(step.get("sql", "")).lower() for step in rule_steps):
+        caveats.append(
+            "商品维度以 stock_code 编码呈现，括号里是数据里的原始描述（未清洗，"
+            "可能出现邮费/费用/残次品等非普通商品的行）"
+        )
     caveats.extend(understanding.assumptions)
-    claim = "；".join(item["text"] for item in claims) or "未取到可用结果"
+    facts = "；".join(item["text"] for item in claims) or "未取到可用结果"
+    # P1-1：先说边界，再给替代分析——用户第一句就知道"什么不能答、什么能答"
+    claim = (
+        "当前不能判断“为什么”的原因（本项目不做因果推断）。"
+        "基于现有数据可以确认：%s" % facts
+    )
     return {
         "mode": "llm_causal_fallback",
         "understanding": understanding,
@@ -557,6 +586,59 @@ def _causal_fallback(question, understanding, plan_obj):
 
 METRIC_LABELS = {"line_revenue": "销售额", "return": "退货量"}
 DIMENSION_LABELS = {"country": "国家", "stock_code": "商品", "customer_id": "客户"}
+DESCRIPTION_DIGITS_RE = re.compile(r"\d+")
+
+
+def _safe_label(text):
+    """把数据里的商品描述放进**结论句**前，先去掉其中的数字。
+
+    为什么：描述里常带数量前缀（如 `4 PURPLE FLOCK DINNER CANDLES`），
+    验证层的 V1 会把其中的 "4" 当成"数据断言数字"，而它并不是断言，
+    于是正确结论会被误判为"没有来源"。去掉数字即可避免这类假阳性；
+    原始描述在证据表里原样可见。
+    """
+    return " ".join(DESCRIPTION_DIGITS_RE.sub(" ", str(text or "")).split())
+
+
+CHANGE_SUPERLATIVE_RE = re.compile(r"(下降|下滑|跌幅|减少).{0,4}(最多|最大|最快)")
+
+
+def _semantic_caveats(question, plan_obj):
+    """两类语义提醒（机械可判，不靠模型自述）：
+
+    1. 商品编码必须带描述，否则用户会把编码当成商品名；
+    2. 「下降最多」是单条记录降幅最大，不等于对整体销售额的贡献最大。
+    """
+    sqls = " ".join(str(step.get("sql", "")) for step in plan_obj.get("steps") or [])
+    lowered = sqls.lower()
+    caveats = []
+    if "stock_code" in lowered and "description" not in lowered:
+        caveats.append(
+            "商品维度用的是 stock_code 编码，本次没有带出 description，"
+            "无法确认它对应什么商品"
+        )
+    if CHANGE_SUPERLATIVE_RE.search(str(question or "")) and "stock_code" not in lowered:
+        caveats.append(
+            "「下降最多」指单条记录的降幅最大，不等于对整体销售额的贡献最大"
+            "（那要看绝对金额损失）"
+        )
+    return caveats
+
+
+def _concentration_caveat(executed):
+    """维度高度分散时必须提醒：否则用户会把"第一名"当成主要因素。"""
+    if len(executed) < 2 or not executed[1].get("rows"):
+        return None
+    first = executed[1]["rows"][0]
+    if len(first) < 3 or first[2] is None:
+        return None
+    share = float(first[2])
+    if share >= 0.5:
+        return None
+    return (
+        "维度高度分散：第一名只占 %.1f%%，不能当作主要因素"
+        "（「谁贡献最大」与「谁变化最大」是两件事）" % (share * 100)
+    )
 
 
 def _partial_month_caveat(executed, win=None):
@@ -642,22 +724,30 @@ def _fallback_claims(executed, understanding):
             if len(row) >= 3 and row[2] is not None
         ][:3]
         if contrib:
+            labels = []
+            numbers = []
+            for row in contrib:
+                name = str(row[0])
+                if len(row) > 3 and row[3]:
+                    safe = _safe_label(row[3])
+                    if safe:
+                        name = "%s（%s）" % (name, safe)
+                labels.append(
+                    "%s，%s，占 %.1f%%" % (name, row[1], float(row[2]) * 100)
+                )
+                numbers.append({"value": row[1], "step": executed[1]["index"]})
+                numbers.append({"value": row[2], "step": executed[1]["index"]})
+                # 纯数字的商品编码（如 23084）会被 V1 当成"数据断言数字"。
+                # 它确实是结果里的一格，所以如实声明来源即可通过核对；
+                # 根治版本是验证层区分"裸编号"（v1.2 任务，本轮不动冻结规则）。
+                if str(row[0]).isdigit():
+                    numbers.append(
+                        {"value": float(row[0]), "step": executed[1]["index"]}
+                    )
             claims.append(
                 {
-                    "text": "占比最高的三个维度：%s"
-                    % "、".join(
-                        "%s（%s，占 %.1f%%）"
-                        % (row[0], row[1], float(row[2]) * 100)
-                        for row in contrib
-                    ),
-                    "numbers": [
-                        {"value": row[1], "step": executed[1]["index"]}
-                        for row in contrib
-                    ]
-                    + [
-                        {"value": row[2], "step": executed[1]["index"]}
-                        for row in contrib
-                    ],
+                    "text": "占比最高的三个维度：%s" % "、".join(labels),
+                    "numbers": numbers,
                     "dimension_values": [str(row[0]) for row in contrib],
                 }
             )

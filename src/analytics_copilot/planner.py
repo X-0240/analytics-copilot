@@ -33,7 +33,9 @@ invoice_ts=时间、country/stock_code/customer_id=维度）与 v_returns（仅�
 4. 若输入给了 `time_window_to_apply.resolved_range`，**每一步都必须**用
    `invoice_ts >= DATE '起点' AND invoice_ts <= TIMESTAMP '终点'` 过滤，
    且占比类计算的分母也要用同一过滤条件；没有给就不要自己加时间条件；
-5. 不要输出 markdown 代码块。"""
+5. 按商品（stock_code）分析时，同时选出 `MAX(description) AS description`，
+   因为编码本身看不出是什么（描述里可能是邮费、费用、残次品等非普通商品）；
+6. 不要输出 markdown 代码块。"""
 
 CONCLUSION_SYSTEM = """你是分析结论撰写者，只输出 JSON。
 输入会给出已执行的步骤编号、SQL 与结果片段。
