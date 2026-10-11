@@ -26,6 +26,15 @@ def test_index_serves_demo_page():
     assert "Analytics Copilot" in response.text
 
 
+def test_capabilities_endpoint_and_page_hook():
+    """能力卡既要能被接口读到，也要出现在首页第一屏。"""
+    card = client.get("/capabilities").json()
+    assert card["time_range"] == ["2010-12-01", "2011-12-09"]
+    assert card["supported"]
+    page = client.get("/").text
+    assert 'id="caps"' in page and "/capabilities" in page
+
+
 def test_ask_returns_conclusion_and_evidence():
     body = client.post(
         "/ask", json={"question": "最近三个月销售额为什么下降？按国家看"}

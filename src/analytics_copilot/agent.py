@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass, field
 
 from analytics_copilot import (
+    capabilities,
     config,
     db,
     explain,
@@ -137,6 +138,18 @@ def resolve_window(understanding):
     return resolved or window.full_period(profile)
 
 
+def capability_refusal(question, hint=None):
+    """拒答理由：说明"哪一项做不到 + 为什么 + 现在能做什么"（引用能力卡）。"""
+    hit = capabilities.refusal_for(question)
+    label = hit[0] if hit else "、".join(hint or [])
+    reason = hit[1] if hit else "该问题超出当前数据能力"
+    return "问题涉及「%s」，超出当前数据能力：%s。%s" % (
+        label,
+        reason,
+        capabilities.summary_line(),
+    )
+
+
 def analysis_context(understanding, win):
     """把"系统实际分析的是什么"写成一个显式对象（P0-2：不禁止默认，禁止隐藏默认）。
 
@@ -233,6 +246,10 @@ def analyze(question, session, client=None, verify_layer=True, meter=None):
     if getattr(client, "meter", None) is None:
         # 外部传入的客户端也要记账（评测 runner 会传桩或真实客户端）
         client.meter = meter
+    # 能力边界先于澄清：问"利润"时不该先反问"看哪个指标"，
+    # 而应直接说清"这份数据没有成本字段"。判定与理由都来自能力卡。
+    if capabilities.refusal_for(question):
+        raise Refused(capability_refusal(question))
     understanding = understand(question)
     if understanding.missing:
         if session["clarify_rounds"] < config.MAX_CLARIFY_ROUNDS:
@@ -268,11 +285,8 @@ def _rule_path(question, understanding):
     """M0 的确定性路径：规则计划 + 规则结论（保持回归测试不变）。"""
     hint = planner.scope_hint(question)
     if hint:
-        # 能力边界（机械可判）：与 LLM 路径保持同一套拒答口径
-        raise Refused(
-            "问题涉及 %s，超出本项目能力边界：只做历史数据的探索/比较/异常/拆解，"
-            "不做预测与因果推断，且数据集没有成本字段。" % "、".join(hint)
-        )
+        # 能力边界（机械可判）：理由直接引用能力卡，而不是一句"超出边界"
+        raise Refused(capability_refusal(question, hint))
     win = resolve_window(understanding)
     calls, checks, evidence = [], [], []
     top_share = None
@@ -360,9 +374,14 @@ def _llm_path(client, question, understanding, verify_layer=True, meter=None):
             # 因果类提问不允许直接拒答（v1.1）：改走确定性计划，
             # 只给证据允许的事实与相关变化，并强制附加边界措辞。
             return _causal_fallback(question, understanding, plan_obj)
-        raise Refused(
-            plan_obj["refuse_reason"], cost_cny=(meter.total if meter else 0.0)
+        # 能力卡命中时用卡上的理由（比模型自由发挥的理由更准、更可追溯）
+        hit = capabilities.refusal_for(question)
+        reason = (
+            capability_refusal(question)
+            if hit
+            else plan_obj["refuse_reason"]
         )
+        raise Refused(reason, cost_cny=(meter.total if meter else 0.0))
 
     executed, calls, checks, evidence = [], [], [], []
     for step in plan_obj["steps"]:

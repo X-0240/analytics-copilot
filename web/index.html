@@ -52,6 +52,10 @@
   </div>
 
   <div class="card">
+    <div id="caps" class="note">正在读取当前数据能力…</div>
+  </div>
+
+  <div class="card">
     <textarea id="q" placeholder="例如：最近三个月销售额为什么下降？按国家看"></textarea>
     <button id="go">分析</button>
     <div id="authRow" class="note" style="display:none;margin-top:10px">
@@ -87,6 +91,17 @@ tokenInput.value = localStorage.getItem('ac_token') || '';
 fetch('/healthz').then(r => r.json()).then(h => {
   if (h.auth_required) document.getElementById('authRow').style.display = 'block';
 }).catch(() => {});
+
+// 第一屏先告诉用户这份数据能问什么（能力卡与拒答依据同源）
+fetch('/capabilities').then(r => r.json()).then(c => {
+  document.getElementById('caps').innerHTML =
+    `<b>当前数据能力</b>　${esc(c.domain)}　${esc(c.time_range.join(' ~ '))}<br>` +
+    `可分析：${(c.supported || []).map(esc).join('；')}<br>` +
+    `不可分析：${(c.unsupported || []).map(x => esc(x.label)).join('、')}<br>` +
+    `<span>${esc(c.caveat || '')}</span>`;
+}).catch(() => {
+  document.getElementById('caps').textContent = '';
+});
 
 function authHeaders() {
   const token = tokenInput.value.trim();

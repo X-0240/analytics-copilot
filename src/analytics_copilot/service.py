@@ -26,7 +26,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from analytics_copilot import agent, config, db, llm, tools
+from analytics_copilot import agent, capabilities, config, db, llm, tools
 
 app = FastAPI(title="Analytics Copilot", version="0.2.0")
 
@@ -312,6 +312,12 @@ def healthz():
     if failed:
         return JSONResponse(status_code=503, content=body)
     return body
+
+
+@app.get("/capabilities")
+def capability_card():
+    """数据能力卡：用户先知道能问什么，拒答时也引用这份内容。"""
+    return capabilities.card()
 
 
 @app.get("/metrics")
