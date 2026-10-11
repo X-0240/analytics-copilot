@@ -1,0 +1,15 @@
+.git/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.env
+logs/
+eval/
+docs/
+tests/
+data/raw/
+data/*.duckdb
+data/*.duckdb.wal
+README.md

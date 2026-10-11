@@ -220,6 +220,6 @@ def _normalize_claims(obj, valid_steps):
     return claims
 
 
-def build_client():
+def build_client(meter=None):
     """对外暴露：planner 需要的客户端。"""
-    return llm.get_client()
+    return llm.get_client(meter)

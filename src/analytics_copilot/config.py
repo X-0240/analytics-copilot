@@ -20,6 +20,17 @@ REQUEST_TIMEOUT_SECONDS = float(os.getenv("AC_REQUEST_TIMEOUT_SECONDS", "30"))
 # 澄清预算（方案冻结稿：最多 2 轮）
 MAX_CLARIFY_ROUNDS = int(os.getenv("AC_MAX_CLARIFY_ROUNDS", "2"))
 
+# M5 公网防护：请求体上限、限流、在飞请求、会话上限（默认值按单实例 Demo 取保守值）
+MAX_BODY_BYTES = int(os.getenv("AC_MAX_BODY_BYTES", "8192"))
+RATE_LIMIT_PER_MIN = int(os.getenv("AC_RATE_LIMIT_PER_MIN", "10"))
+MAX_INFLIGHT = int(os.getenv("AC_MAX_INFLIGHT", "4"))
+SESSION_MAX = int(os.getenv("AC_SESSION_MAX", "1000"))
+SESSION_TTL_SECONDS = float(os.getenv("AC_SESSION_TTL_SECONDS", "1800"))
+
+# 日志：按大小轮转；只留轮转后的前 N 个文件
+LOG_MAX_BYTES = int(os.getenv("AC_LOG_MAX_BYTES", "5242880"))
+LOG_BACKUPS = int(os.getenv("AC_LOG_BACKUPS", "3"))
+
 # 成本护栏（M0 走桩时恒为 0；接真实模型后沿用同一记账点）
 DAILY_COST_BUDGET_CNY = float(os.getenv("AC_DAILY_COST_BUDGET_CNY", "5"))
 PRICE_IN_CNY_PER_1M = float(os.getenv("AC_PRICE_IN_CNY_PER_1M", "2.0"))

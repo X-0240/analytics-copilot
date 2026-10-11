@@ -17,10 +17,28 @@ class LLMError(RuntimeError):
     """LLM 层错误：网络、限流、返回体不合法都归到这里。"""
 
 
+class CostMeter:
+    """按请求累计模型花费（元）。
+
+    为什么要单独一个计量器：一次分析可能调模型多次（计划 + 修复重试 + 结论），
+    失败路径也会花钱。只在成功返回体里取 `cost_cny` 会**低估**预算消耗，
+    所以把计量挂在客户端上，由调用方在每个请求开始时新建一个。
+    """
+
+    def __init__(self):
+        self.total = 0.0
+        self.calls = 0
+
+    def add(self, cost):
+        self.total += float(cost or 0.0)
+        self.calls += 1
+
+
 class LLMClient:
     """接口：只暴露一个方法，参数与返回都是纯 JSON 字符串。"""
 
     name = "base"
+    meter: "CostMeter | None" = None
 
     def complete_json(self, system, user, max_tokens=900):
         raise NotImplementedError
@@ -40,11 +58,12 @@ class OpenAICompatLLM(LLMClient):
 
     name = "openai_compat"
 
-    def __init__(self, base_url, api_key, model, timeout=60):
+    def __init__(self, base_url, api_key, model, timeout=60, meter=None):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
+        self.meter = meter
 
     def complete_json(self, system, user, max_tokens=900):
         body = {
@@ -89,10 +108,13 @@ class OpenAICompatLLM(LLMClient):
             raise LLMError(
                 "EMPTY_CONTENT(finish_reason=%s)" % choice.get("finish_reason")
             )
+        if self.meter is not None:
+            # 记账点只有一个：拿到 usage 就记账（含最终失败的那次调用）
+            self.meter.add(cost)
         return json.dumps({"content": content, "cost_cny": round(cost, 6)})
 
 
-def get_client():
+def get_client(meter=None):
     """有 key 就返回真实客户端，否则返回桩（默认离线可跑）。"""
     if config.FORCE_STUB or not config.LLM_API_KEY:
         return StubLLM()
@@ -100,4 +122,5 @@ def get_client():
         base_url=config.LLM_BASE_URL or "https://api.deepseek.com",
         api_key=config.LLM_API_KEY,
         model=config.LLM_MODEL or "deepseek-flash",
+        meter=meter,
     )

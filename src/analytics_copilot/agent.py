@@ -50,18 +50,21 @@ class ClarifyNeeded(Exception):
 class Refused(Exception):
     """超出能力边界（预测/因果/无成本字段等）：明确拒答并给原因，不硬答。"""
 
-    def __init__(self, reason):
+    def __init__(self, reason, cost_cny=0.0):
         super().__init__(reason)
         self.reason = reason
+        # 拒答前可能已经调过模型：成本要跟着异常走，否则预算会被低估
+        self.cost_cny = cost_cny
 
 
 class UnableToComplete(Exception):
     """两次都拿不到可执行计划/合法结论：**降级为"无法完成"**，不是系统错误。"""
 
-    def __init__(self, reason, code="UNABLE_TO_COMPLETE"):
+    def __init__(self, reason, code="UNABLE_TO_COMPLETE", cost_cny=0.0):
         super().__init__(reason)
         self.reason = reason
         self.code = code
+        self.cost_cny = cost_cny
 
 
 def understand(question):
@@ -141,14 +144,21 @@ def plan(understanding):
     ]
 
 
-def analyze(question, session, client=None, verify_layer=True):
+def analyze(question, session, client=None, verify_layer=True, meter=None):
     """跑完一次分析；`session` 用于记澄清轮数与假设。
 
     两条路径共用前半段（理解 + 澄清预算），只在"规划"处分叉：
     - 无 key / 桩：走 M0 的规则计划（离线可复现，测试默认走这条）；
     - 有 key：走受控 LLM 规划（`planner`），SQL 仍受 M0 护栏约束。
+
+    `meter`（`llm.CostMeter`）用于把**本次请求的全部模型调用**记账，
+    包括失败重试与拒答前的那几次；服务层拿它做日预算熔断。
     """
-    client = client or planner.build_client()
+    meter = meter if meter is not None else llm.CostMeter()
+    client = client or planner.build_client(meter)
+    if getattr(client, "meter", None) is None:
+        # 外部传入的客户端也要记账（评测 runner 会传桩或真实客户端）
+        client.meter = meter
     understanding = understand(question)
     if understanding.missing:
         if session["clarify_rounds"] < config.MAX_CLARIFY_ROUNDS:
@@ -169,7 +179,12 @@ def analyze(question, session, client=None, verify_layer=True):
 
     if isinstance(client, llm.StubLLM) or config.FORCE_STUB:
         return _rule_path(question, understanding)
-    return _llm_path(client, question, understanding, verify_layer)
+    outcome = _llm_path(client, question, understanding, verify_layer, meter)
+    # 以计量器为准：成功路径的 cost_cny 只覆盖"最后两次调用"，
+    # 而预算要覆盖"整次请求真正花了多少"
+    if meter.calls:
+        outcome["cost_cny"] = round(meter.total, 6)
+    return outcome
 
 
 def _rule_path(question, understanding):
@@ -237,7 +252,7 @@ def _rule_path(question, understanding):
     }
 
 
-def _llm_path(client, question, understanding, verify_layer=True):
+def _llm_path(client, question, understanding, verify_layer=True, meter=None):
     """受控 LLM 路径：LLM 出计划与结论，护栏决定能不能执行。"""
     try:
         plan_obj = planner.ask_plan(
@@ -246,14 +261,17 @@ def _llm_path(client, question, understanding, verify_layer=True):
     except (planner.PlanInvalid, db.SqlRejected, json.JSONDecodeError) as exc:
         # 修不好就不再抛异常：给用户一个明确的"我做不到 + 原因"
         raise UnableToComplete(
-            "两次都没能生成可执行的分析计划：%s" % exc
+            "两次都没能生成可执行的分析计划：%s" % exc,
+            cost_cny=(meter.total if meter else 0.0),
         ) from exc
     if plan_obj["scope"] == "refuse":
         if explain.is_causal_topic(question, plan_obj["refuse_reason"]):
             # 因果类提问不允许直接拒答（v1.1）：改走确定性计划，
             # 只给证据允许的事实与相关变化，并强制附加边界措辞。
             return _causal_fallback(question, understanding, plan_obj)
-        raise Refused(plan_obj["refuse_reason"])
+        raise Refused(
+            plan_obj["refuse_reason"], cost_cny=(meter.total if meter else 0.0)
+        )
 
     executed, calls, checks, evidence = [], [], [], []
     for step in plan_obj["steps"]:
@@ -263,7 +281,8 @@ def _llm_path(client, question, understanding, verify_layer=True):
             # 执行期才暴露的 SQL 问题（列不存在、类型不匹配等）同样按"做不到"降级，
             # 不让用户体验到系统错误。
             raise UnableToComplete(
-                "查询执行失败（第 %d 步）：%s" % (step["index"], exc)
+                "查询执行失败（第 %d 步）：%s" % (step["index"], exc),
+                cost_cny=(meter.total if meter else 0.0),
             ) from exc
         calls.append(call)
         checks.extend(step_checks)
@@ -294,7 +313,10 @@ def _llm_path(client, question, understanding, verify_layer=True):
     try:
         conclusion_obj = planner.ask_conclusion(client, question, executed)
     except (planner.PlanInvalid, json.JSONDecodeError) as exc:
-        raise UnableToComplete("结论输出不合法：%s" % exc) from exc
+        raise UnableToComplete(
+            "结论输出不合法：%s" % exc,
+            cost_cny=(meter.total if meter else 0.0),
+        ) from exc
     risky = [item for item in checks if not item.ok]
     caveats = list(conclusion_obj["caveats"]) + [item.detail for item in risky]
     caveats.extend(understanding.assumptions)

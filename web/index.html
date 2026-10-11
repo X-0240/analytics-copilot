@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Analytics Copilot · 业务数据分析助手</title>
+<style>
+  :root { --fg:#1c1c1e; --muted:#6b7280; --line:#e5e7eb; --bg:#fafafa;
+          --accent:#1f6feb; --warn:#b45309; --bad:#b91c1c; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 16px 64px; background:var(--bg); color:var(--fg);
+         font:15px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  main { max-width:860px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px;
+          padding:16px; margin-bottom:14px; }
+  textarea { width:100%; min-height:64px; padding:10px; font:inherit;
+             border:1px solid var(--line); border-radius:8px; resize:vertical; }
+  button { margin-top:10px; padding:9px 18px; font:inherit; color:#fff;
+           background:var(--accent); border:0; border-radius:8px; cursor:pointer; }
+  button[disabled] { opacity:.55; cursor:default; }
+  .row { display:flex; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:13px; }
+  .badge { display:inline-block; padding:1px 8px; border-radius:999px;
+           background:#eef2ff; color:#3730a3; font-size:12px; }
+  .claim { font-size:16px; margin:6px 0 10px; }
+  ul { margin:6px 0; padding-left:20px; }
+  li { margin:3px 0; }
+  .cav { color:var(--warn); }
+  details { border-top:1px solid var(--line); padding:8px 0; }
+  summary { cursor:pointer; font-size:13px; color:var(--muted); }
+  pre { background:#0f172a; color:#e2e8f0; padding:10px; border-radius:8px;
+        overflow:auto; font-size:12px; line-height:1.5; }
+  table { border-collapse:collapse; width:100%; font-size:13px; margin-top:6px; }
+  th,td { border:1px solid var(--line); padding:4px 6px; text-align:left; }
+  .status { font-size:14px; }
+  .status.refused,.status.error { color:var(--bad); }
+  .status.need_clarification { color:var(--warn); }
+  .note { color:var(--muted); font-size:12px; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Analytics Copilot</h1>
+  <div class="sub">
+    业务问题 → 分析计划 → 只读查询 → 结论 + 证据链。
+    数字对不上查询结果、证据不足以支持结论、结论超出证据允许的解释等级时，
+    系统会降级或直说"证不住"，而不是硬给一个答案。
+  </div>
+
+  <div class="card">
+    <textarea id="q" placeholder="例如：最近三个月销售额为什么下降？按国家看"></textarea>
+    <button id="go">分析</button>
+    <div class="note" style="margin-top:8px">
+      演示数据集：UCI Online Retail（公开数据，2010-12 ~ 2011-12，无姓名与联系方式）。
+      提问内容不会被保存原文，只记录长度与哈希；请勿输入真实业务数据。
+    </div>
+  </div>
+
+  <div id="out"></div>
+
+  <div class="note">
+    <a href="/metrics" target="_blank">/metrics</a> ·
+    <a href="/healthz" target="_blank">/healthz</a> ·
+    <a href="/docs" target="_blank">API 文档</a>
+  </div>
+</main>
+
+<script>
+const out = document.getElementById('out');
+const q = document.getElementById('q');
+const go = document.getElementById('go');
+const sid = localStorage.getItem('ac_sid') ||
+  (Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+localStorage.setItem('ac_sid', sid);
+
+function esc(text) {
+  return String(text == null ? '' : text).replace(/[&<>]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+function levelName(level) {
+  return { 1: 'Level 1 · 事实描述', 2: 'Level 2 · 相关性解释' }[level] ||
+    ('Level ' + level);
+}
+
+function renderEvidence(items) {
+  if (!items || !items.length) return '';
+  return items.map((item, i) => `
+    <details>
+      <summary>证据 ${i + 1}｜${esc(item.step)}｜返回 ${esc(item.row_count)} 行${
+        item.truncated ? '（已截断）' : ''}</summary>
+      <pre>${esc(item.sql)}</pre>
+      <table>
+        <tr>${(item.columns || []).map(c => `<th>${esc(c)}</th>`).join('')}</tr>
+        ${(item.sample_rows || []).map(r =>
+          `<tr>${r.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}
+      </table>
+    </details>`).join('');
+}
+
+function render(data) {
+  const status = data.status || 'error';
+  if (status === 'need_clarification') {
+    out.innerHTML = `<div class="card"><div class="status need_clarification">
+      还差一点信息，请补充：${(data.missing || []).map(esc).join('、')}</div></div>`;
+    return;
+  }
+  if (status === 'refused') {
+    out.innerHTML = `<div class="card"><div class="status refused">
+      超出能力边界，已明确拒答</div><p>${esc(data.reason)}</p></div>`;
+    return;
+  }
+  if (status === 'unable_to_complete') {
+    out.innerHTML = `<div class="card"><div class="status refused">
+      做不到（结构化降级，不是系统错误）</div>
+      <p>${esc(data.reason)}</p><div class="note">code: ${esc(data.code)}</div></div>`;
+    return;
+  }
+  if (status !== 'answered') {
+    out.innerHTML = `<div class="card"><div class="status error">
+      ${esc(data.code || 'ERROR')}</div><p>${esc(data.message)}</p></div>`;
+    return;
+  }
+  const verification = data.verification || {};
+  out.innerHTML = `
+    <div class="card">
+      <div class="row">
+        <span class="badge">${esc(levelName(data.explanation_level))}</span>
+        <span>置信度 ${esc(data.confidence)}</span>
+        <span>验证 ${esc(verification.status || 'not_run')}</span>
+        <span>耗时 ${esc(data.elapsed_ms)} ms</span>
+        <span>成本 ¥${esc(data.cost_cny)}</span>
+      </div>
+      <p class="claim">${esc(data.claim)}</p>
+      ${(data.caveats || []).length
+        ? `<div class="cav">边界与不确定性：<ul>${
+            data.caveats.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>`
+        : ''}
+      ${(data.level_violations || []).length
+        ? `<div class="cav">解释强度越界已降级：${esc(
+            JSON.stringify(data.level_violations))}</div>`
+        : ''}
+    </div>
+    <div class="card">
+      <div class="sub" style="margin:0 0 6px">证据链（每一步都能点开核对）</div>
+      ${renderEvidence(data.evidence)}
+    </div>`;
+}
+
+async function ask() {
+  const question = q.value.trim();
+  if (question.length < 2) { q.focus(); return; }
+  go.disabled = true;
+  out.innerHTML = '<div class="card">分析中……（真实模型调用，通常 3–15 秒）</div>';
+  try {
+    const resp = await fetch('/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, session_id: sid })
+    });
+    render(await resp.json());
+  } catch (err) {
+    out.innerHTML = `<div class="card"><div class="status error">请求失败</div>
+      <p>${esc(err)}</p></div>`;
+  } finally {
+    go.disabled = false;
+  }
+}
+
+go.addEventListener('click', ask);
+q.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) ask();
+});
+</script>
+</body>
+</html>
