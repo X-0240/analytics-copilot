@@ -146,8 +146,12 @@ function render(data) {
     return;
   }
   const verification = data.verification || {};
+  const ctx = data.analysis_context || {};
   out.innerHTML = `
     <div class="card">
+      ${ctx.text
+        ? `<div class="note" style="margin:-2px 0 10px">${esc(ctx.text)}</div>`
+        : ''}
       <div class="row">
         <span class="badge">${esc(levelName(data.explanation_level))}</span>
         <span>置信度 ${esc(data.confidence)}</span>

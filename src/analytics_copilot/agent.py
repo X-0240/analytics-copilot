@@ -34,6 +34,8 @@ class Understanding:
     # 可解析的时间窗短语（如「最近三个月」）；空串表示没有明确窗口
     window_request: str = ""
     dimensions: list[str] = field(default_factory=list)
+    # 维度是"用户点名"还是"系统默认"：P0-2 要求默认可见，所以必须记下来
+    dimension_source: str = ""
     comparison_basis: str = ""
     missing: list[str] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
@@ -120,6 +122,7 @@ def understand(question):
         time_window=time_window,
         window_request=window_request,
         dimensions=dimensions,
+        dimension_source="explicit" if dimensions else "",
         comparison_basis=comparison,
         missing=missing,
     )
@@ -132,6 +135,39 @@ def resolve_window(understanding):
         understanding.window_request or understanding.question, profile
     )
     return resolved or window.full_period(profile)
+
+
+def analysis_context(understanding, win):
+    """把"系统实际分析的是什么"写成一个显式对象（P0-2：不禁止默认，禁止隐藏默认）。
+
+    返回结构化字段 + 一句可直接展示的文案；口径文案与 SQL 用的是同一个时间窗对象。
+    """
+    dimension = (understanding.dimensions or ["country"])[0]
+    source = understanding.dimension_source or (
+        "explicit" if understanding.dimensions else "default"
+    )
+    metric = understanding.metric or "line_revenue"
+    metric_label = METRIC_LABELS.get(metric, metric)
+    dimension_label = DIMENSION_LABELS.get(dimension, dimension)
+    window_label = win.get("requested") or "全期"
+    start, end = win["resolved_range"]
+    source_text = "问题中指定" if source == "explicit" else "未指定，按默认"
+    text = (
+        "分析口径：指标=%s；维度=%s（%s）；时间范围=%s（%s ~ %s）"
+        % (metric_label, dimension_label, source_text, window_label, start, end)
+    )
+    if source != "explicit":
+        text += "；可指定维度：国家 / 商品 / 客户"
+    return {
+        "metric": metric,
+        "metric_label": metric_label,
+        "dimension": dimension,
+        "dimension_label": dimension_label,
+        "dimension_source": source,
+        "time_window": window_label,
+        "time_range": list(win["resolved_range"]),
+        "text": text,
+    }
 
 
 def plan(understanding, win=None):
@@ -199,6 +235,9 @@ def analyze(question, session, client=None, verify_layer=True, meter=None):
         ]
         understanding.time_window = understanding.time_window or "全部时间"
         understanding.dimensions = understanding.dimensions or ["country"]
+        understanding.dimension_source = (
+            understanding.dimension_source or "default"
+        )
         understanding.metric = understanding.metric or "line_revenue"
 
     if not understanding.time_window:
@@ -279,6 +318,7 @@ def _rule_path(question, understanding):
         "checks": checks,
         "plan": {"scope": "ok", "steps": rule_plan, "refuse_reason": ""},
         "time_window": win,
+        "analysis_context": analysis_context(understanding, win),
         "explanation_level": level,
         "level_violations": [],
         "cost_cny": 0.0,
@@ -417,6 +457,8 @@ def _llm_path(client, question, understanding, verify_layer=True, meter=None):
             plan_obj, executed
         ),
         "level_violations": level_violations,
+        "time_window": win,
+        "analysis_context": analysis_context(understanding, win),
         "verification": (
             {
                 "status": verdict.status,
@@ -497,6 +539,7 @@ def _causal_fallback(question, understanding, plan_obj):
         "checks": checks,
         "plan": {"scope": "ok", "steps": rule_steps, "refuse_reason": ""},
         "time_window": win,
+        "analysis_context": analysis_context(understanding, win),
         "executed": executed,
         "claims": claims,
         "next_questions": _next_questions(understanding),

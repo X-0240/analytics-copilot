@@ -205,3 +205,29 @@ def test_vague_recent_stays_full_period():
     assert outcome["time_window"]["applied"] is False
     assert "invoice_ts >= DATE" not in sqls
     assert "全期" in " ".join(outcome["conclusion"].caveats)
+
+
+def test_default_dimension_is_declared():
+    """P0-2 用例 1：没指定维度时必须写明"按默认"。"""
+    outcome = agent.analyze("销售额怎么样", _session())
+    ctx = outcome["analysis_context"]
+    assert ctx["dimension"] == "country"
+    assert ctx["dimension_source"] == "default"
+    assert "未指定，按默认" in ctx["text"]
+
+
+def test_explicit_dimension_is_declared_as_specified():
+    """P0-2 用例 2：点名商品时不许再写"默认国家"。"""
+    outcome = agent.analyze("哪个商品销售额最高", _session())
+    ctx = outcome["analysis_context"]
+    assert ctx["dimension"] == "stock_code"
+    assert ctx["dimension_source"] == "explicit"
+    assert "商品" in ctx["text"] and "问题中指定" in ctx["text"]
+    assert "默认" not in ctx["text"]
+
+
+def test_ambiguous_question_asks_instead_of_guessing():
+    """P0-2 用例 3：多义问题不许偷偷选维度，要先澄清。"""
+    with pytest.raises(agent.ClarifyNeeded) as excinfo:
+        agent.analyze("哪个下降最多？", _session())
+    assert any("维度" in item for item in excinfo.value.missing)
