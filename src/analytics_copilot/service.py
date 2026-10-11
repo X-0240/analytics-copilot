@@ -158,7 +158,8 @@ async def ask(payload: AskRequest):
         "caveats": conclusion.caveats,
         "evidence": conclusion.evidence,
         "plan": outcome.get("plan", {}),
-        "cited_steps": outcome.get("cited_steps", []),
+        "claims": outcome.get("claims", []),
+        "verification": outcome.get("verification", {"status": "not_run"}),
         "cost_cny": outcome.get("cost_cny", 0.0),
         "checks": [
             {"name": item.name, "ok": item.ok, "detail": item.detail}

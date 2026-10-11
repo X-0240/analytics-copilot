@@ -31,11 +31,15 @@ invoice_ts=时间、country/stock_code/customer_id=维度）与 v_returns（仅�
 
 CONCLUSION_SYSTEM = """你是分析结论撰写者，只输出 JSON。
 输入会给出已执行的步骤编号、SQL 与结果片段。
-输出格式：{"claim":"...","cited_steps":[1,2],"caveats":["..."],"confidence":"low|medium|high"}
+输出格式：
+{"claims":[{"text":"...","numbers":[{"value":0.84,"step":1}],
+            "dimension_values":["United Kingdom"]}],
+ "caveats":["..."],"confidence":"low|medium|high"}
 硬性要求：
-1. cited_steps 只能引用真实存在的步骤编号，不得编造；
-2. 结论必须能由结果直接推出，推导不了的不要写；
-3. 若最大因素占比不高或证据不足，必须写进 caveats 并降低 confidence。"""
+1. 每条 claim 的 numbers 必须写清数值与它来自哪一步，**不得编造**；
+2. dimension_values 只能写结果里真实出现过的维度取值；
+3. 结论必须能由结果直接推出，推导不了的不要写；
+4. 若最大因素占比不高或证据不足，必须写进 caveats 并降低 confidence。"""
 
 
 class PlanInvalid(Exception):
@@ -139,7 +143,7 @@ def ask_plan(client, question, understanding, assumptions):
 
 
 def ask_conclusion(client, question, executed):
-    """让 LLM 基于**已执行结果**写结论，并校验引用是否真实存在。"""
+    """让 LLM 基于**已执行结果**写结构化结论（claims + 数字来源 + 维度值）。"""
     compact = [
         {
             "step": item["index"],
@@ -155,25 +159,62 @@ def ask_conclusion(client, question, executed):
     user = json.dumps(
         {"question": question, "executed_steps": compact}, ensure_ascii=False
     )
-    envelope = json.loads(client.complete_json(CONCLUSION_SYSTEM, user, max_tokens=600))
+    envelope = json.loads(client.complete_json(CONCLUSION_SYSTEM, user, max_tokens=700))
     obj = _extract_json(envelope["content"])
-    claim = str(obj.get("claim") or "").strip()
-    if not claim:
+    claims = _normalize_claims(obj, {item["index"] for item in executed})
+    if not claims:
         raise PlanInvalid("CONCLUSION_EMPTY", "结论为空")
-    valid = {item["index"] for item in executed}
-    cited = [int(x) for x in (obj.get("cited_steps") or []) if str(x).isdigit()]
-    missing = [x for x in cited if x not in valid]
-    if missing:
-        raise PlanInvalid(
-            "CONCLUSION_BAD_CITATION", "引用了不存在的步骤编号：%s" % missing
-        )
     return {
-        "claim": claim,
-        "cited_steps": cited,
+        "claims": claims,
+        "claim": "；".join(item["text"] for item in claims),
         "caveats": [str(x) for x in (obj.get("caveats") or [])],
         "confidence": str(obj.get("confidence") or "low"),
         "cost_cny": envelope.get("cost_cny", 0.0),
     }
+
+
+def _normalize_claims(obj, valid_steps):
+    """把模型输出规范成 claims 列表；引用不存在的步骤即判无效。
+
+    兼容两种形态：新的 `claims[]`（结构化，能被验证器逐条检查）
+    与旧的 `claim` + `cited_steps`（退化为一条不含数字来源的结论，
+    这样 V1 会如实判它"数字没有声明来源"）。
+    """
+    raw_claims = obj.get("claims")
+    if not raw_claims and obj.get("claim"):
+        raw_claims = [{"text": obj.get("claim"), "numbers": []}]
+    claims = []
+    for item in raw_claims or []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        numbers = []
+        for number in item.get("numbers") or []:
+            if not isinstance(number, dict) or number.get("value") is None:
+                continue
+            step = number.get("step")
+            step = int(step) if str(step).isdigit() else None
+            if step is not None and step not in valid_steps:
+                raise PlanInvalid(
+                    "CONCLUSION_BAD_CITATION", "引用了不存在的步骤编号：%s" % step
+                )
+            try:
+                value = float(number["value"])
+            except (TypeError, ValueError):
+                continue
+            numbers.append({"value": value, "step": step})
+        claims.append(
+            {
+                "text": text,
+                "numbers": numbers,
+                "dimension_values": [
+                    str(x) for x in (item.get("dimension_values") or [])
+                ],
+            }
+        )
+    return claims
 
 
 def build_client():

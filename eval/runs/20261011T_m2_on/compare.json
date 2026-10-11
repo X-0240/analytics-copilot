@@ -1,0 +1,30 @@
+{
+  "baseline_run": "20261011T_m2_off2",
+  "verified_run": "20261011T_m2_on",
+  "baseline": {
+    "claims_total": 35,
+    "claims_supported": 30,
+    "claim_support_rate": 0.8571,
+    "strong_claims": 8,
+    "cost_cny": 0.049166,
+    "latency_ms_mean": 3526
+  },
+  "verified": {
+    "claims_total": 40,
+    "claims_supported": 32,
+    "claim_support_rate": 0.8,
+    "strong_claims": 4,
+    "blocked": 52,
+    "downgraded": 0,
+    "blocked_by_current_rules": 18,
+    "unsupported_runs": 4,
+    "cost_cny": 0.061976,
+    "latency_ms_mean": 3780
+  },
+  "delta": {
+    "claim_support_rate": -0.0571,
+    "strong_claims": -4,
+    "latency_ms_mean": 254,
+    "cost_cny": 0.01281
+  }
+}

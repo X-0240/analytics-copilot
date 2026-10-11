@@ -8,7 +8,7 @@ M0 的"理解"不是分类器，而是一组**可检查的状态谓词**（缺�
 import re
 from dataclasses import dataclass, field
 
-from analytics_copilot import config, llm, planner, tools
+from analytics_copilot import config, llm, planner, tools, verifier
 
 PERIOD_WORDS = ("最近", "近", "本月", "上月", "今年", "去年", "季度", "周", "月")
 COMPARE_WORDS = ("比", "对比", "相比", "下降", "上升", "增加", "减少", "原因")
@@ -131,7 +131,7 @@ def plan(understanding):
     ]
 
 
-def analyze(question, session, client=None):
+def analyze(question, session, client=None, verify_layer=True):
     """跑完一次分析；`session` 用于记澄清轮数与假设。
 
     两条路径共用前半段（理解 + 澄清预算），只在"规划"处分叉：
@@ -159,7 +159,7 @@ def analyze(question, session, client=None):
 
     if isinstance(client, llm.StubLLM) or config.FORCE_STUB:
         return _rule_path(question, understanding)
-    return _llm_path(client, question, understanding)
+    return _llm_path(client, question, understanding, verify_layer)
 
 
 def _rule_path(question, understanding):
@@ -217,7 +217,7 @@ def _rule_path(question, understanding):
     }
 
 
-def _llm_path(client, question, understanding):
+def _llm_path(client, question, understanding, verify_layer=True):
     """受控 LLM 路径：LLM 出计划与结论，护栏决定能不能执行。"""
     plan_obj = planner.ask_plan(
         client, question, understanding, understanding.assumptions
@@ -260,15 +260,32 @@ def _llm_path(client, question, understanding):
     caveats.extend(understanding.assumptions)
     if any(item["truncated"] for item in evidence):
         caveats.append("至少一步结果被截断，结论可能不完整")
-    # 机械优先：护栏发现问题时，不允许结论自称高置信
+    claims = conclusion_obj["claims"]
+    verdict = None
+    if verify_layer:
+        # 验证层 v1：逐条机械判定结论是否被证据支持
+        verdict = verifier.verify(question, plan_obj, executed, claims)
+        caveats.extend(verdict.caveats)
+    # 机械优先：护栏或验证层发现问题时，不允许结论自称高置信
     confidence = conclusion_obj["confidence"]
-    if risky and confidence in ("high", "medium"):
+    if (risky or (verdict and verdict.blocked())) and confidence in (
+        "high",
+        "medium",
+    ):
+        confidence = "low"
+    claim_text = conclusion_obj["claim"]
+    if verdict and verdict.status == "unsupported":
+        # 拿不到证据支持时**不输出强结论**，只说明现状与缺什么
+        claim_text = (
+            "本问题当前拿不到被证据支持的结论：结论中的关键数字无法追溯到查询结果，"
+            "已按验证层判定降级，仅列出证据与不确定性。"
+        )
         confidence = "low"
     return {
         "mode": "llm",
         "understanding": understanding,
         "conclusion": Conclusion(
-            claim=conclusion_obj["claim"],
+            claim=claim_text,
             evidence=evidence,
             confidence=confidence,
             caveats=caveats,
@@ -276,7 +293,20 @@ def _llm_path(client, question, understanding):
         "tool_calls": calls,
         "checks": checks,
         "plan": plan_obj,
-        "cited_steps": conclusion_obj["cited_steps"],
+        # 供评测层离线复评（服务层不返回这个内部字段）
+        "executed": executed,
+        "claims": claims,
+        "verification": (
+            {
+                "status": verdict.status,
+                "blocked": len(verdict.blocked()),
+                "downgraded": len(verdict.downgraded()),
+                "claim_status": verdict.claim_status,
+            }
+            if verdict
+            else {"status": "not_run", "blocked": 0, "downgraded": 0,
+                  "claim_status": []}
+        ),
         "cost_cny": round(
             plan_obj.get("cost_cny", 0.0) + conclusion_obj.get("cost_cny", 0.0), 6
         ),
