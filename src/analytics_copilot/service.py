@@ -31,6 +31,7 @@ COUNTERS = {
     "requests": 0,
     "clarify": 0,
     "refused": 0,
+    "unable": 0,
     "errors": 0,
     "timeouts": 0,
 }
@@ -115,6 +116,23 @@ async def ask(payload: AskRequest):
         return {
             "session_id": session_id,
             "status": "refused",
+            "reason": exc.reason,
+        }
+    except agent.UnableToComplete as exc:
+        # 降级：分析做不出来时给结构化说明，而不是 500
+        COUNTERS["unable"] = COUNTERS.get("unable", 0) + 1
+        record.update(
+            {
+                "status": "unable_to_complete",
+                "reason": exc.reason,
+                "code": exc.code,
+            }
+        )
+        _log(record)
+        return {
+            "session_id": session_id,
+            "status": "unable_to_complete",
+            "code": exc.code,
             "reason": exc.reason,
         }
     except db.SqlRejected as exc:

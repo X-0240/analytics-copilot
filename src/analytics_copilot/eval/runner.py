@@ -44,6 +44,14 @@ def run_task(task, verify_layer=True):
                 "clarifications_asked": asked,
                 "reason": exc.reason,
             }
+        except agent.UnableToComplete as exc:
+            return {
+                "task_id": task["task_id"],
+                "kind": task.get("kind"),
+                "status": "unable_to_complete",
+                "clarifications_asked": asked,
+                "reason": exc.reason,
+            }
         except Exception as exc:
             return {
                 "task_id": task["task_id"],
@@ -274,6 +282,9 @@ def summarize(rows):
             [row for row in rows if row.get("clarifications_asked")]
         ),
         "refused": len([row for row in rows if row["status"] == "refused"]),
+        "unable_to_complete": len(
+            [row for row in rows if row["status"] == "unable_to_complete"]
+        ),
         "errors": len([row for row in rows if row["status"] == "error"]),
         "answer_rate": round(len(answered) / total, 4) if total else 0.0,
         "trace_complete_rate": round(len(complete) / total, 4) if total else 0.0,
@@ -328,7 +339,8 @@ def _acceptance(rows):
     clarify_ok = [
         row
         for row in boundary
-        if row.get("status") == "refused" or row.get("clarifications_asked")
+        if row.get("status") in ("refused", "unable_to_complete")
+        or row.get("clarifications_asked")
     ]
     return {
         "normal_total": len(normal),

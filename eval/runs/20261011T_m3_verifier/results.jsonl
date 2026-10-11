@@ -1,0 +1,12 @@
+{"case_id": "VC-01", "purpose": "数字正确、维度值在结果里 → 应支持", "claims": 1, "got": [true], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "supported"}
+{"case_id": "VC-02", "purpose": "数字与结果不符 → 应不支持", "claims": 1, "got": [false], "want": [false], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "unsupported"}
+{"case_id": "VC-03", "purpose": "数字对但声明的来源步骤错 → 应不支持", "claims": 1, "got": [false], "want": [false], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "unsupported"}
+{"case_id": "VC-04", "purpose": "文本里出现没声明来源的数字 → 应不支持", "claims": 1, "got": [false], "want": [false], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "unsupported"}
+{"case_id": "VC-05", "purpose": "点名的维度值不在结果里 → 应不支持", "claims": 1, "got": [false], "want": [false], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "unsupported"}
+{"case_id": "VC-06", "purpose": "日期数字不得被当成数据断言（假阳性回归）", "claims": 1, "got": [true], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "supported"}
+{"case_id": "VC-07", "purpose": "商品编号不得被当成数据断言（假阳性回归）", "claims": 1, "got": [true], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "supported"}
+{"case_id": "VC-08", "purpose": "排名数字（前 10 名）不属于数据断言", "claims": 1, "got": [true], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "supported"}
+{"case_id": "VC-09", "purpose": "归因问题 + 单维度 + 无时间序列 → V3 应触发（降级）", "claims": 1, "got": [true], "want": [true], "v3_fires": true, "v3_expected": true, "v3_correct": true, "status": "partially_supported"}
+{"case_id": "VC-10", "purpose": "归因问题但证据含两个维度 → V3 不触发", "claims": 1, "got": [true], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "supported"}
+{"case_id": "VC-11", "purpose": "有步骤返回 0 行 → V3 应触发", "claims": 1, "got": [true], "want": [true], "v3_fires": true, "v3_expected": true, "v3_correct": true, "status": "partially_supported"}
+{"case_id": "VC-12", "purpose": "混合案例：一条支持、一条不支持 → 逐条判定要能分开", "claims": 2, "got": [true, false], "want": [true, false], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "partially_supported"}

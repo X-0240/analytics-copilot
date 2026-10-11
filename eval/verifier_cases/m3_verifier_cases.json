@@ -1,0 +1,155 @@
+{
+  "version": "m3-v1",
+  "note": "验证能力实验用的固定结论集：结论、来源步骤、期望判定全部由作者构造（构造人=作者），不依赖任何模型运行",
+  "cases": [
+    {
+      "case_id": "VC-01",
+      "purpose": "数字正确、维度值在结果里 → 应支持",
+      "question": "各国销售额占比",
+      "plan": {"steps": [{"sql": "SELECT country, share FROM v_sales"}]},
+      "executed": {"1": ["United Kingdom", 0.84, "Germany", 0.11]},
+      "claims": [
+        {"text": "英国贡献 84%", "numbers": [{"value": 0.84, "step": 1}],
+         "dimension_values": ["英国"]}
+      ],
+      "expected": {"supported": [true], "v3_fires": false}
+    },
+    {
+      "case_id": "VC-02",
+      "purpose": "数字与结果不符 → 应不支持",
+      "question": "各国销售额占比",
+      "plan": {"steps": [{"sql": "SELECT country, share FROM v_sales"}]},
+      "executed": {"1": ["United Kingdom", 0.84]},
+      "claims": [
+        {"text": "英国贡献 90%", "numbers": [{"value": 0.90, "step": 1}],
+         "dimension_values": ["英国"]}
+      ],
+      "expected": {"supported": [false], "v3_fires": false}
+    },
+    {
+      "case_id": "VC-03",
+      "purpose": "数字对但声明的来源步骤错 → 应不支持",
+      "question": "各国销售额占比",
+      "plan": {"steps": [{"sql": "a"}, {"sql": "b"}]},
+      "executed": {"1": ["United Kingdom", 0.84], "2": ["Germany", 0.11]},
+      "claims": [
+        {"text": "德国贡献 11%", "numbers": [{"value": 0.11, "step": 1}],
+         "dimension_values": []}
+      ],
+      "expected": {"supported": [false], "v3_fires": false}
+    },
+    {
+      "case_id": "VC-04",
+      "purpose": "文本里出现没声明来源的数字 → 应不支持",
+      "question": "退货情况",
+      "plan": {"steps": [{"sql": "SELECT COUNT(*) FROM v_returns"}]},
+      "executed": {"1": [10624]},
+      "claims": [
+        {"text": "退货率上升到 12%", "numbers": [], "dimension_values": []}
+      ],
+      "expected": {"supported": [false], "v3_fires": false}
+    },
+    {
+      "case_id": "VC-05",
+      "purpose": "点名的维度值不在结果里 → 应不支持",
+      "question": "各国退货",
+      "plan": {"steps": [{"sql": "SELECT country FROM v_returns"}]},
+      "executed": {"1": ["United Kingdom", 0.5]},
+      "claims": [
+        {"text": "德国退货最多", "numbers": [], "dimension_values": ["德国"]}
+      ],
+      "expected": {"supported": [false], "v3_fires": false}
+    },
+    {
+      "case_id": "VC-06",
+      "purpose": "日期数字不得被当成数据断言（假阳性回归）",
+      "question": "月度退货趋势",
+      "plan": {"steps": [{"sql": "SELECT DATE_TRUNC('month', invoice_ts) AS month, COUNT(*) AS n FROM v_returns GROUP BY 1"}]},
+      "executed": {"1": ["2010-12-01 00:00:00", 798, "2011-01-01 00:00:00", 797]},
+      "claims": [
+        {"text": "2010-12 的退货量为 798 件", "numbers": [{"value": 798, "step": 1}],
+         "dimension_values": []}
+      ],
+      "expected": {"supported": [true], "v3_fires": false}
+    },
+    {
+      "case_id": "VC-07",
+      "purpose": "商品编号不得被当成数据断言（假阳性回归）",
+      "question": "退货金额最高的商品",
+      "plan": {"steps": [{"sql": "SELECT stock_code, SUM(line_revenue) FROM v_returns GROUP BY 1"}]},
+      "executed": {"1": ["23843", -168469.6, 0.1879]},
+      "claims": [
+        {"text": "商品 23843 的退货金额约 168469.6，占比约 18.79%",
+         "numbers": [{"value": -168469.6, "step": 1}, {"value": 0.1879, "step": 1}],
+         "dimension_values": []}
+      ],
+      "expected": {"supported": [true], "v3_fires": false}
+    },
+    {
+      "case_id": "VC-08",
+      "purpose": "排名数字（前 10 名）不属于数据断言",
+      "question": "销售额前十商品",
+      "plan": {"steps": [{"sql": "SELECT stock_code, SUM(line_revenue) FROM v_sales GROUP BY 1"}]},
+      "executed": {"1": ["85123A", 1000.5, 0.001]},
+      "claims": [
+        {"text": "前 10 名商品里 85123A 的销售额约 1000.5 占比约 0.1%",
+         "numbers": [{"value": 1000.5, "step": 1}, {"value": 0.001, "step": 1}],
+         "dimension_values": []}
+      ],
+      "expected": {"supported": [true], "v3_fires": false}
+    },
+    {
+      "case_id": "VC-09",
+      "purpose": "归因问题 + 单维度 + 无时间序列 → V3 应触发（降级）",
+      "question": "为什么英国销售下降",
+      "plan": {"steps": [{"sql": "SELECT country, SUM(line_revenue) FROM v_sales GROUP BY 1"}]},
+      "executed": {"1": ["United Kingdom", 0.84]},
+      "claims": [
+        {"text": "英国销售占比 84%", "numbers": [{"value": 0.84, "step": 1}],
+         "dimension_values": ["英国"]}
+      ],
+      "expected": {"supported": [true], "v3_fires": true}
+    },
+    {
+      "case_id": "VC-10",
+      "purpose": "归因问题但证据含两个维度 → V3 不触发",
+      "question": "为什么销售额下降",
+      "plan": {"steps": [
+        {"sql": "SELECT country, SUM(line_revenue) FROM v_sales GROUP BY 1"},
+        {"sql": "SELECT stock_code, SUM(line_revenue) FROM v_sales GROUP BY 1"}
+      ]},
+      "executed": {"1": ["United Kingdom", 0.84], "2": ["85123A", 0.03]},
+      "claims": [
+        {"text": "英国占比 84%", "numbers": [{"value": 0.84, "step": 1}],
+         "dimension_values": ["英国"]}
+      ],
+      "expected": {"supported": [true], "v3_fires": false}
+    },
+    {
+      "case_id": "VC-11",
+      "purpose": "有步骤返回 0 行 → V3 应触发",
+      "question": "各国销售额",
+      "plan": {"steps": [{"sql": "SELECT country FROM v_sales GROUP BY 1"}]},
+      "executed": {"1": [], "2": ["United Kingdom", 0.84]},
+      "claims": [
+        {"text": "英国占比 84%", "numbers": [{"value": 0.84, "step": 2}],
+         "dimension_values": ["英国"]}
+      ],
+      "expected": {"supported": [true], "v3_fires": true}
+    },
+    {
+      "case_id": "VC-12",
+      "purpose": "混合案例：一条支持、一条不支持 → 逐条判定要能分开",
+      "question": "各国销售额与占比",
+      "plan": {"steps": [{"sql": "SELECT country, SUM(line_revenue) AS v, share FROM v_sales GROUP BY 1"}]},
+      "executed": {"1": ["United Kingdom", 9747747.93, 0.84]},
+      "claims": [
+        {"text": "英国销售额合计 9747747.93", "numbers": [{"value": 9747747.93, "step": 1}],
+         "dimension_values": ["英国"]},
+        {"text": "德国占比 30%", "numbers": [{"value": 0.30, "step": 1}],
+         "dimension_values": ["德国"]}
+      ],
+      "expected": {"supported": [true, false], "v3_fires": false}
+    }
+  ]
+}

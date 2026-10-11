@@ -1,0 +1,15 @@
+{
+  "version": "m3-v1",
+  "split": "dev",
+  "note": "M3 补的 V3 边界任务：故意问原因，但证据容易只落到单一维度；构造人=作者",
+  "tasks": [
+    {"task_id": "T-401", "kind": "boundary", "type": "attribution_single_dim",
+     "question": "为什么英国的销售额下降"},
+    {"task_id": "T-402", "kind": "boundary", "type": "attribution_product",
+     "question": "是哪个商品导致销售额下降的"},
+    {"task_id": "T-403", "kind": "boundary", "type": "attribution_customer",
+     "question": "客户维度上，谁导致销售额下降"},
+    {"task_id": "T-404", "kind": "boundary", "type": "attribution_ok",
+     "question": "按国家和商品两个维度看，销售额下降主要由什么贡献"}
+  ]
+}

@@ -22,6 +22,9 @@ IDENT_RE = re.compile(
     r"(商品|SKU|sku|货号|编号|客户|invoice)\s*[:：]?\s*[A-Za-z0-9\-]{3,}"
 )
 RANK_RE = re.compile(r"(前|第)\s*\d+")
+# 裸的字母数字混合标识（85123A、SKU-001）：含字母且长度 ≥4 的 token 一律不算数据断言。
+# 已知限制：纯数字编号（如 23843）只有在带「商品/编号」前缀时才被剔除。
+ALNUM_ID_RE = re.compile(r"\b(?=[A-Za-z0-9]{4,}\b)[A-Za-z0-9]*[A-Za-z][A-Za-z0-9]*\b")
 ATTRIBUTION_WORDS = ("为什么", "原因", "导致", "归因", "贡献")
 # 维度值中英对照（数据里是国家英文名，结论常用中文）：只覆盖常用国家；
 # 覆盖不到会判 V2 失败，这是已知限制，不假装通用。
@@ -78,7 +81,12 @@ def _cells(executed):
 
 
 def _close(left, right):
-    """数值比较：绝对容差 0.01，或相对 2%（覆盖四舍五入与百分比换算）。"""
+    """数值比较：绝对容差 0.01，或相对 2%（覆盖四舍五入与百分比换算）。
+
+    另接受**绝对值相等**：退货金额在数据里为负（`line_revenue` 含退货为负），
+    结论常以绝对值表述（"退货金额 168469.6"）。放宽这一条是有意的取舍：
+    漏掉"正负号写反"的错误，换取不冤枉合法的绝对值表述。
+    """
     if left is None or right is None:
         return False
     try:
@@ -86,6 +94,8 @@ def _close(left, right):
     except (TypeError, ValueError):
         return False
     if abs(first - second) <= 0.01:
+        return True
+    if abs(abs(first) - abs(second)) <= 0.01:
         return True
     return abs(first - second) <= 0.02 * max(abs(first), abs(second), 1e-9)
 
@@ -160,6 +170,7 @@ def _strip_non_claims(text):
     """把日期、标识、排名里的数字剔掉，只留下"数据断言"里的数字。"""
     cleaned = DATE_RE.sub(" ", text)
     cleaned = IDENT_RE.sub(" ", cleaned)
+    cleaned = ALNUM_ID_RE.sub(" ", cleaned)
     return RANK_RE.sub(" ", cleaned)
 
 

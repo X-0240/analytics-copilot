@@ -8,7 +8,7 @@ M0 的"理解"不是分类器，而是一组**可检查的状态谓词**（缺�
 import re
 from dataclasses import dataclass, field
 
-from analytics_copilot import config, llm, planner, tools, verifier
+from analytics_copilot import config, db, llm, planner, tools, verifier
 
 PERIOD_WORDS = ("最近", "近", "本月", "上月", "今年", "去年", "季度", "周", "月")
 COMPARE_WORDS = ("比", "对比", "相比", "下降", "上升", "增加", "减少", "原因")
@@ -52,6 +52,15 @@ class Refused(Exception):
     def __init__(self, reason):
         super().__init__(reason)
         self.reason = reason
+
+
+class UnableToComplete(Exception):
+    """两次都拿不到可执行计划/合法结论：**降级为"无法完成"**，不是系统错误。"""
+
+    def __init__(self, reason, code="UNABLE_TO_COMPLETE"):
+        super().__init__(reason)
+        self.reason = reason
+        self.code = code
 
 
 def understand(question):
@@ -219,9 +228,15 @@ def _rule_path(question, understanding):
 
 def _llm_path(client, question, understanding, verify_layer=True):
     """受控 LLM 路径：LLM 出计划与结论，护栏决定能不能执行。"""
-    plan_obj = planner.ask_plan(
-        client, question, understanding, understanding.assumptions
-    )
+    try:
+        plan_obj = planner.ask_plan(
+            client, question, understanding, understanding.assumptions
+        )
+    except (planner.PlanInvalid, db.SqlRejected) as exc:
+        # 修不好就不再抛异常：给用户一个明确的"我做不到 + 原因"
+        raise UnableToComplete(
+            "两次都没能生成可执行的分析计划：%s" % exc
+        ) from exc
     if plan_obj["scope"] == "refuse":
         raise Refused(plan_obj["refuse_reason"])
 
@@ -254,7 +269,10 @@ def _llm_path(client, question, understanding, verify_layer=True):
             }
         )
 
-    conclusion_obj = planner.ask_conclusion(client, question, executed)
+    try:
+        conclusion_obj = planner.ask_conclusion(client, question, executed)
+    except planner.PlanInvalid as exc:
+        raise UnableToComplete("结论输出不合法：%s" % exc) from exc
     risky = [item for item in checks if not item.ok]
     caveats = list(conclusion_obj["caveats"]) + [item.detail for item in risky]
     caveats.extend(understanding.assumptions)
