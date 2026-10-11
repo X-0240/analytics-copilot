@@ -149,3 +149,39 @@ def test_rule_path_carries_level_boundary_wording():
     if outcome["explanation_level"] == 2:
         assert "不能证明因果关系" in caveats
     assert "不支持因果结论" in caveats
+
+
+def test_causal_fallback_gives_checkable_facts_and_next_steps(monkeypatch):
+    """兜底回答要给可核查事实、写清口径、给下一步问法，而不是只说"我不能回答"。"""
+    from analytics_copilot import config
+
+    monkeypatch.setattr(config, "FORCE_STUB", False)
+
+    class RefuseClient:
+        name = "fake"
+
+        def complete_json(self, system, user, max_tokens=900):
+            import json as _json
+
+            payload = {
+                "scope": "refuse",
+                "refuse_reason": "因果推断超出边界",
+                "assumptions": [],
+                "steps": [],
+            }
+            return _json.dumps(
+                {"content": _json.dumps(payload, ensure_ascii=False), "cost_cny": 0}
+            )
+
+    outcome = agent.analyze(
+        "最近三个月销售额为什么下降？按国家看", _session(), client=RefuseClient()
+    )
+    claims = outcome["claims"]
+    assert len(claims) >= 2
+    # 每条事实都必须被验证层判为"有证据支持"（数字来源对得上结果行）
+    assert all(item["supported"] for item in outcome["verification"]["claim_status"])
+    assert outcome["verification"]["blocked"] == 0
+    caveats = " ".join(outcome["conclusion"].caveats)
+    assert "不能证明因果" in caveats
+    assert "口径" in caveats
+    assert len(outcome["next_questions"]) == 2

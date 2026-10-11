@@ -506,6 +506,7 @@ async def ask(payload: AskRequest, request: Request):
         "verification": outcome.get("verification", {"status": "not_run"}),
         "explanation_level": outcome.get("explanation_level", 1),
         "level_violations": outcome.get("level_violations", []),
+        "next_questions": outcome.get("next_questions", []),
         "cost_cny": cost,
         "checks": [
             {"name": item.name, "ok": item.ok, "detail": item.detail}

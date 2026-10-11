@@ -390,11 +390,14 @@ def _llm_path(client, question, understanding, verify_layer=True, meter=None):
 
 
 def _causal_fallback(question, understanding, plan_obj):
-    """因果类提问的确定性兜底：不给因果结论，只给证据允许的事实与相关变化。
+    """因果类提问的确定性兜底：给能查到的事实 + 口径 + 下一步问法，不给因果结论。
 
     为什么不让 LLM 再试一次：模型在因果类问题上倾向于直接拒答（实测两次），
-    继续追问反而浪费调用；这里用规则计划保证"至少给到 Level 1/2 的可核查结论"，
-    并把边界措辞写死。
+    继续追问反而浪费调用。三条设计约束：
+
+    1. **只陈述能从结果行机械读出的事实**，数字逐字来自结果并声明来源步骤；
+    2. **走同一套验证层**（V1/V2/V3/V4），兜底回答不再享有"免检"；
+    3. **写清口径与下一步**——不丢下一句"我不能回答"就走。
     """
     rule_steps = plan(understanding)
     executed, evidence, checks, calls = [], [], [], []
@@ -405,6 +408,9 @@ def _causal_fallback(question, understanding, plan_obj):
         executed.append(
             {
                 "index": len(executed) + 1,
+                "name": step["name"],
+                "sql": result.sql,
+                "columns": result.columns,
                 "rows": result.rows,
                 "row_count": len(result.rows),
             }
@@ -420,21 +426,22 @@ def _causal_fallback(question, understanding, plan_obj):
             }
         )
     level = explain.evidence_level({"steps": rule_steps}, executed)
-    top = executed[-1]["rows"][0] if executed and executed[-1]["rows"] else None
-    claim = (
-        "本次只做事实与相关变化描述：%s"
-        % (
-            "最大维度是 %s（值 %s）" % (top[0], top[1])
-            if top
-            else "未取到可用维度结果"
-        )
-    )
+    claims = _fallback_claims(executed, understanding)
+    verdict = verifier.verify(question, {"steps": rule_steps}, executed, claims)
     caveats = [
         "模型原判为拒答（%s），按 v1.1 因果类提问不允许直接拒答，已改为给出证据允许的层级"
         % plan_obj["refuse_reason"]
     ]
-    caveats.extend(explain.level_caveats(level))
+    caveats.extend(verdict.caveats)
+    caveats.append(
+        "口径：以上事实为全期（2010-12 ~ 2011-12）汇总，"
+        "规则计划当前不按“最近 N 个月”过滤时间窗"
+    )
+    partial = _partial_month_caveat(executed)
+    if partial:
+        caveats.append(partial)
     caveats.extend(understanding.assumptions)
+    claim = "；".join(item["text"] for item in claims) or "未取到可用结果"
     return {
         "mode": "llm_causal_fallback",
         "understanding": understanding,
@@ -445,11 +452,131 @@ def _causal_fallback(question, understanding, plan_obj):
         "checks": checks,
         "plan": {"scope": "ok", "steps": rule_steps, "refuse_reason": ""},
         "executed": executed,
-        "claims": [],
+        "claims": claims,
+        "next_questions": _next_questions(understanding),
         "explanation_level": level,
         "level_violations": [],
+        "verification": {
+            "status": verdict.status,
+            "blocked": len(verdict.blocked()),
+            "downgraded": len(verdict.downgraded()),
+            "claim_status": verdict.claim_status,
+        },
         "cost_cny": round(plan_obj.get("cost_cny", 0.0), 6),
     }
+
+
+METRIC_LABELS = {"line_revenue": "销售额", "return": "退货量"}
+DIMENSION_LABELS = {"country": "国家", "stock_code": "商品", "customer_id": "客户"}
+
+
+def _partial_month_caveat(executed):
+    """末月不完整时必须提醒：否则月度首末对比会被读成"暴跌"。
+
+    数据集到 2011-12-09 为止，12 月只有 9 天，合计天然偏小。
+    判据是机械的：趋势最后一行所属月份 == 数据最大时间戳所属月份，且后者日号 < 28。
+    """
+    if not executed or not executed[0].get("rows"):
+        return None
+    profile = db.load_metadata().get("profile") or {}
+    ts_max = str(profile.get("ts_max") or "")
+    month_row = executed[0]["rows"][-1]
+    if len(month_row) < 2 or not ts_max:
+        return None
+    if _month_label(month_row[0]) != ts_max[:7]:
+        return None
+    try:
+        day = int(ts_max[8:10])
+    except ValueError:
+        return None
+    if day >= 28:
+        return None
+    return (
+        "口径提醒：数据集最后一个月只统计到 %s，该月不是完整月（合计天然偏小），"
+        "不能用它的低值判断“下降”" % ts_max[:10]
+    )
+
+
+def _month_label(value):
+    """把结果里的时间戳写成 YYYY-MM（验证器会把这种形式当日期剔掉，不算数据断言）。"""
+    return str(value)[:7]
+
+
+def _fallback_claims(executed, understanding):
+    """从已执行结果机械读出两条可核查事实，不做任何推断。"""
+    claims = []
+    if not executed:
+        return claims
+    trend = executed[0].get("rows") or []
+    rows = [row for row in trend if len(row) >= 2 and row[1] is not None]
+    if rows:
+        first, last = rows[0], rows[-1]
+        lowest = min(rows, key=lambda row: row[1])
+        highest = max(rows, key=lambda row: row[1])
+        claims.append(
+            {
+                "text": (
+                    "%s按月汇总：从 %s 的 %s 到 %s 的 %s，其间最低 %s（%s）、最高 %s（%s）"
+                    % (
+                        METRIC_LABELS.get(understanding.metric, "指标"),
+                        _month_label(first[0]),
+                        first[1],
+                        _month_label(last[0]),
+                        last[1],
+                        _month_label(lowest[0]),
+                        lowest[1],
+                        _month_label(highest[0]),
+                        highest[1],
+                    )
+                ),
+                "numbers": [
+                    {"value": first[1], "step": executed[0]["index"]},
+                    {"value": last[1], "step": executed[0]["index"]},
+                    {"value": lowest[1], "step": executed[0]["index"]},
+                    {"value": highest[1], "step": executed[0]["index"]},
+                ],
+                "dimension_values": [],
+            }
+        )
+    if len(executed) > 1:
+        contrib = [
+            row
+            for row in (executed[1].get("rows") or [])
+            if len(row) >= 3 and row[2] is not None
+        ][:3]
+        if contrib:
+            claims.append(
+                {
+                    "text": "占比最高的三个维度：%s"
+                    % "、".join(
+                        "%s（%s，占 %.1f%%）"
+                        % (row[0], row[1], float(row[2]) * 100)
+                        for row in contrib
+                    ),
+                    "numbers": [
+                        {"value": row[1], "step": executed[1]["index"]}
+                        for row in contrib
+                    ]
+                    + [
+                        {"value": row[2], "step": executed[1]["index"]}
+                        for row in contrib
+                    ],
+                    "dimension_values": [str(row[0]) for row in contrib],
+                }
+            )
+    return claims
+
+
+def _next_questions(understanding):
+    """给出两问可执行的下一个问题（确定性模板，不调模型）。"""
+    metric = METRIC_LABELS.get(understanding.metric, "销售额")
+    dimension = DIMENSION_LABELS.get(
+        (understanding.dimensions or ["country"])[0], "国家"
+    )
+    return [
+        "按%s拆解%s：哪些%s最集中？" % (dimension, metric, dimension),
+        "%s的按月趋势里，波动最大的是哪几个月？" % metric,
+    ]
 
 
 def named_dimension(question):

@@ -164,6 +164,10 @@ function render(data) {
         ? `<div class="cav">解释强度越界已降级：${esc(
             JSON.stringify(data.level_violations))}</div>`
         : ''}
+      ${(data.next_questions || []).length
+        ? `<div style="margin-top:10px">可以继续问：<ul>${
+            data.next_questions.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`
+        : ''}
     </div>
     <div class="card">
       <div class="sub" style="margin:0 0 6px">证据链（每一步都能点开核对）</div>
