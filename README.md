@@ -39,13 +39,30 @@ python scripts/build_db.py --check  # 核对库与元数据
 python -m pytest tests -q
 python -m ruff check src tests scripts
 
-# 4 起服务（本地；M0 不部署公网）
+# 4 起服务（本地直跑；容器方式见下一节）
 PYTHONPATH=src python -m uvicorn analytics_copilot.service:app --port 8200
 
 # 5 评测骨架冒烟
 PYTHONPATH=src python -m analytics_copilot.eval.runner \
   --tasks eval/tasks/dev_tasks_v0.json --out eval/runs/smoke
 ```
+
+## 容器化运行（M5）
+
+```bash
+docker build -t analytics-copilot:m5-1 .
+docker run -d --name ac-m5 -p 8200:8200 \
+  -v "<仓库路径>/data:/app/data:ro" \
+  -v "<仓库路径>/logs:/app/logs" \
+  -e AC_LLM_API_KEY -e AC_FORCE_STUB=0 -e AC_DAILY_COST_BUDGET_CNY=1 \
+  analytics-copilot:m5-1
+```
+
+- 打开 `http://localhost:8200/` 是演示页；`/healthz` 是就绪检查，`/metrics` 是指标；
+- **数据库不打进镜像**：7 MB 的 `data/analytics.duckdb` 走只读卷，换数据不用重建镜像；
+- **必须单 worker**：会话在进程内存里，多 worker 会把同一会话分叉；
+- key 只经宿主环境变量按名传入（`-e AC_LLM_API_KEY`），不出现在命令行、镜像与日志里；
+  键名清单见 `.env.example`，参数含义与验收项见 `docs/M5_部署方案.md` 与 `docs/M5_记录.md`。
 
 ## 架构（M0）
 
@@ -65,7 +82,7 @@ PYTHONPATH=src python -m analytics_copilot.eval.runner \
 | `agent.py` | 任务理解（谓词）+ 计划 + 结论与证据链 |
 | `verifier.py` | 结论验证层：V1 数值一致性 · V2 证据覆盖 · V3 结果充分性 · V4 解释强度越界 |
 | `explain.py` | 解释强度模型（Level 1/2/3）与因果措辞的机械判据 |
-| `service.py` | HTTP 边界、会话隔离、日志、成本点、超时、错误码 |
+| `service.py` | HTTP 边界、会话隔离、公网防护、日志、成本点、超时、错误码 |
 | `eval/` | 任务集格式 + runner（完成率、追溯链、支持率、等级分布、成本） |
 
 ## 边界（不做）
