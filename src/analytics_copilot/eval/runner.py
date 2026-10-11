@@ -13,7 +13,7 @@ import time
 import uuid
 from pathlib import Path
 
-from analytics_copilot import agent
+from analytics_copilot import agent, versions
 
 
 def run_task(task, verify_layer=True):
@@ -399,6 +399,8 @@ def main(argv=None):
     summary = summarize(rows)
     summary["verify_layer"] = verify_layer
     summary["run_id"] = uuid.uuid4().hex[:8]
+    # 版本标识：报告里引用哪个数字，就能对上哪一版
+    summary["versions"] = versions.stamp()
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if args.out:
         out_dir = Path(args.out)

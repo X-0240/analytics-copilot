@@ -26,9 +26,17 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from analytics_copilot import agent, capabilities, config, db, llm, tools
+from analytics_copilot import (
+    agent,
+    capabilities,
+    config,
+    db,
+    llm,
+    tools,
+    versions,
+)
 
-app = FastAPI(title="Analytics Copilot", version="0.2.0")
+app = FastAPI(title="Analytics Copilot", version=versions.APP_VERSION)
 
 SESSIONS: dict[str, dict] = {}
 COUNTERS = {
@@ -308,6 +316,8 @@ def healthz():
         "stub": config.FORCE_STUB,
         # 只回"要不要访问码"，不回访问码本身
         "auth_required": bool(config.DEMO_TOKEN),
+        # 版本标识：报告里引用哪个数字，就能对上哪一版
+        "versions": versions.stamp(),
     }
     if failed:
         return JSONResponse(status_code=503, content=body)

@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from analytics_copilot import verifier  # noqa: E402
+from analytics_copilot import verifier, versions  # noqa: E402
 
 
 def _is_numeric_like(text):
@@ -108,6 +108,7 @@ def evaluate(path):
     return {
         "file": Path(path).name,
         "version": payload.get("version"),
+        "versions": versions.stamp(),
         "cases": len(results),
         "claims": expected_unsupported + expected_supported,
         "expected_unsupported": expected_unsupported,
