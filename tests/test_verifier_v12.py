@@ -11,7 +11,7 @@ EXECUTED = [
             ["22086", "PAPER CHAIN KIT", 45173.14, 0.0152],
         ],
     },
-    {"index": 2, "columns": ["total"], "rows": [[9747747.93]]},
+    {"index": 2, "columns": ["total"], "rows": [[9747747.93], [1070704.67]]},
 ]
 
 
@@ -86,3 +86,40 @@ def test_wrong_unit_is_not_rescued():
         "总销售额约 974.77 千", [{"value": 9747747.93, "step": 2}]
     )
     assert status["supported"] is False
+
+
+def test_thousands_separator_is_one_number():
+    """v1.3：千分位写法不能被拆成碎片。"""
+    status, _ = _verdict(
+        "2011年10月销售额为 1,070,704.67",
+        [{"value": 1070704.67, "step": 2}],
+    )
+    assert status["supported"] is True
+    assert not any("070" in item for item in status["problems"])
+
+
+def test_bare_month_reference_is_not_an_assertion():
+    """v1.3：裸月份（11月）是时间指代，不是数据断言。"""
+    status, _ = _verdict(
+        "11月销售额为 9747747.93",
+        [{"value": 9747747.93, "step": 2}],
+    )
+    assert status["supported"] is True
+
+
+def test_step_reference_is_not_an_assertion():
+    """v1.3：结论被要求引用步骤编号，编号不能被当成数据断言。"""
+    status, _ = _verdict(
+        "步骤2 中销售额最高的是 9747747.93",
+        [{"value": 9747747.93, "step": 2}],
+    )
+    assert status["supported"] is True
+
+
+def test_short_slash_date_in_description_is_not_fragments():
+    """v1.3：描述里的短斜杠日期串（21/5/10）不是三个数字断言。"""
+    status, _ = _verdict(
+        "商品 23084（reverse 21/5/10 adjustment）销售额为 56289.81",
+        [{"value": 56289.81, "step": 1}],
+    )
+    assert status["supported"] is True

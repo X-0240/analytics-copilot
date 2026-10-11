@@ -1,0 +1,50 @@
+{
+  "tasks": 18,
+  "answered": 15,
+  "asked_clarification": 6,
+  "refused": 2,
+  "unable_to_complete": 1,
+  "errors": 0,
+  "answer_rate": 0.8333,
+  "trace_complete_rate": 0.8333,
+  "plan_present_rate": 0.8333,
+  "cost_cny_total": 0.089078,
+  "acceptance": {
+    "normal_total": 12,
+    "normal_ok": 11,
+    "normal_pass": true,
+    "boundary_total": 6,
+    "boundary_ok": 6,
+    "boundary_pass": true,
+    "refused_expected": 3,
+    "refused_actual": 2
+  },
+  "verification": {
+    "answered": 15,
+    "claims_total": 53,
+    "claims_supported": 48,
+    "claim_support_rate": 0.9057,
+    "blocked": 9,
+    "downgraded": 1,
+    "strong_claims": 8,
+    "unsupported_runs": 0,
+    "level2_runs": 4,
+    "level1_runs": 11,
+    "level_violations": 1,
+    "caveats_total": 88
+  },
+  "todo_metrics": [
+    "结论支持率",
+    "误拦截率与漏放率（需独立判定者，按纪律不用 LLM judge）",
+    "边界降级正确率（holdout）"
+  ],
+  "verify_layer": true,
+  "run_id": "e7daeb0e",
+  "versions": {
+    "validator_version": "v1.3",
+    "explain_version": "v1.1",
+    "window_version": "v1.0",
+    "capability_version": "v1.0",
+    "app_version": "0.3.0"
+  }
+}

@@ -6,7 +6,8 @@
 
 APP_VERSION = "0.3.0"
 # 验证层：v1 → v1.1（解释强度）→ v1.2（实体编码 / 单位换算）
-VALIDATOR_VERSION = "v1.2"
+#        → v1.3（数值书写归一：千分位 / 裸月份）
+VALIDATOR_VERSION = "v1.3"
 # 解释强度模型
 EXPLAIN_VERSION = "v1.1"
 # 时间窗解析层（P0-1 引入）

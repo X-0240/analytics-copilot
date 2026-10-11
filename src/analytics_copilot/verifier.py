@@ -6,6 +6,9 @@ V3 结果充分性：归因类问题只有单维度/无时间序列，或某步�
   不作因果断言，只降置信度并加 caveat（**不删结论**，避免误杀现象描述）。
 V4 解释强度越界（v1.1）：结论用了因果措辞但证据只到 Level 1/2 → 降级 + 加边界措辞。
 
+v1.3 把"同一个数的不同写法"归一（规则见 `docs/验证标准_v1.3.md`）：
+千分位 `1,070,704.67`、单位后缀 `974.77 万`、裸月份 `11月` 都先归一再比对。
+
 v1.2 收窄了两处误拦（规则见 `docs/验证标准_v1.2.md`）：
 
 1. **实体编码不算数字断言**：只对"实体字段列"（stock_code / customer_id /
@@ -22,8 +25,11 @@ from dataclasses import dataclass, field
 
 from analytics_copilot import explain
 
+# 数字：支持千分位写法（1,070,704.67）与单位后缀；先归一成同一个数再比对。
+# v1.3：模型常写千分位，不认它会把一个数字拆成 3 个碎片 → 正确结论被判"没来源"。
 NUMBER_RE = re.compile(
-    r"(\d+(?:\.\d+)?)\s*(千万|百万|十万|%|％|万|千|亿)?"
+    r"(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
+    r"\s*(千万|百万|十万|%|％|万|千|亿)?"
 )
 SCALE_UNITS = {"千": 1000.0, "万": 10000.0, "十万": 100000.0,
                "百万": 1000000.0, "千万": 10000000.0, "亿": 100000000.0}
@@ -33,11 +39,22 @@ IDENTIFIER_COLUMNS = ("stock_code", "customer_id", "invoice_no", "dimension_valu
 #   1. 日期：2010-12 / 2011年12月 / 2011/01
 #   2. 标识：商品 23843 / SKU 85123A / 编号 12345
 #   3. 排名：前 10 名 / 第 3 位
-DATE_RE = re.compile(r"\d{4}\s*[-/年]\s*\d{1,2}(\s*[-/月]\s*\d{1,2})?")
+# 日期：完整日期 + 裸月份/日（"11月为 1461756.25"、"12月9日"），
+# 后两者是**时间指代**不是数据断言，不认就会把 "11" 当成没来源的数字。
+DATE_RE = re.compile(
+    r"\d{4}\s*[-/年]\s*\d{1,2}(\s*[-/月]\s*\d{1,2})?"
+    r"|\d{1,2}\s*月(\s*\d{1,2}\s*日)?"
+    r"|\d{1,2}\s*日"
+)
 IDENT_RE = re.compile(
     r"(商品|SKU|sku|货号|编号|客户|invoice)\s*[:：]?\s*[A-Za-z0-9\-]{3,}"
 )
 RANK_RE = re.compile(r"(前|第)\s*\d+")
+# 步骤引用："步骤1"/"步骤 2"/"step3"——结论**被要求**引用步骤编号，
+# 不能反过来把编号当成数据断言（否则优秀回答必被误判）。
+STEP_RE = re.compile(r"(步骤|step)\s*\d+", re.IGNORECASE)
+# 短斜杠日期串（数据描述里常见 "reverse 21/5/10 adjustment"）
+SHORT_DATE_RE = re.compile(r"\b\d{1,2}/\d{1,2}/\d{1,2}\b")
 # 裸的字母数字混合标识（85123A、SKU-001）：含字母且长度 ≥4 的 token 一律不算数据断言。
 # 已知限制：纯数字编号（如 23843）只有在带「商品/编号」前缀时才被剔除。
 ALNUM_ID_RE = re.compile(r"\b(?=[A-Za-z0-9]{4,}\b)[A-Za-z0-9]*[A-Za-z][A-Za-z0-9]*\b")
@@ -164,7 +181,7 @@ def _readings(raw, unit):
     也可能写 974.77。两边都按同一个单位系数归一，才谈得上"确定换算关系"；
     没有对应原始数字的「约 100 万」依旧过不了（两种读法都找不到证据）。
     """
-    base = float(raw)
+    base = float(str(raw).replace(",", ""))
     if unit in ("%", "％"):
         return [base / 100]
     if unit in SCALE_UNITS:
@@ -261,8 +278,10 @@ def verify_claims(claims, executed):
 def _strip_non_claims(text):
     """把日期、标识、排名里的数字剔掉，只留下"数据断言"里的数字。"""
     cleaned = DATE_RE.sub(" ", text)
+    cleaned = SHORT_DATE_RE.sub(" ", cleaned)
     cleaned = IDENT_RE.sub(" ", cleaned)
     cleaned = ALNUM_ID_RE.sub(" ", cleaned)
+    cleaned = STEP_RE.sub(" ", cleaned)
     return RANK_RE.sub(" ", cleaned)
 
 
