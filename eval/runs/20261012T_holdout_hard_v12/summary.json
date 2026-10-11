@@ -1,0 +1,23 @@
+{
+  "file": "holdout_hard_v1.json",
+  "version": "holdout-hard-v1",
+  "cases": 8,
+  "claims": 8,
+  "expected_unsupported": 1,
+  "caught": 1,
+  "miss_rate": 0.0,
+  "false_reject_rate": 0.2857,
+  "false_rejects": [
+    {
+      "case_id": "HO-HARD-03",
+      "purpose": "中文写法是别名表外的国家（业务上支持，规则可能误拦）"
+    },
+    {
+      "case_id": "HO-HARD-05",
+      "purpose": "裸数字编号当成数据断言（业务上是编号，机械当数字）"
+    }
+  ],
+  "v3_expected": 1,
+  "v3_hit": 1,
+  "evaluated_at": "2026-10-12T01:47:38"
+}

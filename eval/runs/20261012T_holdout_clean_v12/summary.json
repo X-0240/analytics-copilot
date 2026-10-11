@@ -1,0 +1,14 @@
+{
+  "file": "holdout_v1.json",
+  "version": "holdout-v1",
+  "cases": 58,
+  "claims": 58,
+  "expected_unsupported": 28,
+  "caught": 28,
+  "miss_rate": 0.0,
+  "false_reject_rate": 0.0,
+  "false_rejects": [],
+  "v3_expected": 2,
+  "v3_hit": 2,
+  "evaluated_at": "2026-10-12T01:47:38"
+}
