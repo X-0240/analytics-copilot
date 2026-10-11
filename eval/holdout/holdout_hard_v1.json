@@ -1,0 +1,319 @@
+{
+  "version": "holdout-hard-v1",
+  "generated_by": "eval/holdout/gen_holdout.py",
+  "seed": 20261011,
+  "note": "期望判定由生成规则决定（非人工标注）；生成后即冻结，不得按结果调整规则",
+  "cases": [
+    {
+      "case_id": "HO-HARD-01",
+      "purpose": "扰动 1.5%：在容差内，业务上可接受",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "United Kingdom",
+          8187806.36,
+          0.84
+        ]
+      },
+      "claims": [
+        {
+          "text": "United Kingdom 占比约 85.3%",
+          "numbers": [
+            {
+              "value": 0.8526,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      },
+      "hard_note": "容差内扰动：既可能判支持也可能判不支持，看阈值取向"
+    },
+    {
+      "case_id": "HO-HARD-02",
+      "purpose": "扰动 3%：超出容差，应判不支持",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "United Kingdom",
+          8187806.36,
+          0.84
+        ]
+      },
+      "claims": [
+        {
+          "text": "United Kingdom 占比约 86.5%",
+          "numbers": [
+            {
+              "value": 0.84,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      },
+      "hard_note": "同一条结论、两种标注取向，用来检验阈值是否真的在起作用"
+    },
+    {
+      "case_id": "HO-HARD-03",
+      "purpose": "中文写法是别名表外的国家（业务上支持，规则可能误拦）",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "South Africa",
+          221698.21,
+          0.0227
+        ]
+      },
+      "claims": [
+        {
+          "text": "南非贡献 2.27%",
+          "numbers": [
+            {
+              "value": 0.0227,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "南非"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      },
+      "hard_note": "别名表只覆盖 12 个常用国家；表外会出现误拦"
+    },
+    {
+      "case_id": "HO-HARD-04",
+      "purpose": "金额用「万」表述（业务上支持，机械匹配做不到）",
+      "question": "销售额总量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT SUM(line_revenue) FROM v_sales"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          8187806.36
+        ]
+      },
+      "claims": [
+        {
+          "text": "第一名国家的销售额约 818.78 万元",
+          "numbers": [
+            {
+              "value": 818.78,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      },
+      "hard_note": "单位换算（万）不被机械匹配支持，属已知限制"
+    },
+    {
+      "case_id": "HO-HARD-05",
+      "purpose": "裸数字编号当成数据断言（业务上是编号，机械当数字）",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "AMAZONFEE",
+          -235281.59
+        ]
+      },
+      "claims": [
+        {
+          "text": "23843 的退货金额约 235281.59",
+          "numbers": [
+            {
+              "value": 235281.59,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      },
+      "hard_note": "纯数字编号不带前缀时无法与数字断言区分，属已知限制"
+    },
+    {
+      "case_id": "HO-HARD-06",
+      "purpose": "日期变体 2010/12 也应被剥离",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts), COUNT(*) FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2010-12-01 00:00:00",
+          798
+        ]
+      },
+      "claims": [
+        {
+          "text": "2010/12 的退货量为 798 件",
+          "numbers": [
+            {
+              "value": 798,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      },
+      "hard_note": "日期写法变体"
+    },
+    {
+      "case_id": "HO-HARD-07",
+      "purpose": "归因 + 双维度 → V3 不应触发",
+      "question": "为什么销售额下降",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, SUM(line_revenue) FROM v_sales GROUP BY 1"
+          },
+          {
+            "sql": "SELECT stock_code, SUM(line_revenue) FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "United Kingdom",
+          8187806.36
+        ],
+        "2": [
+          "85123A",
+          1000.5
+        ]
+      },
+      "claims": [
+        {
+          "text": "United Kingdom 销售额 8187806.36",
+          "numbers": [
+            {
+              "value": 8187806.36,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "United Kingdom"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      },
+      "hard_note": "与 HO-HARD-08 成对照"
+    },
+    {
+      "case_id": "HO-HARD-08",
+      "purpose": "归因 + 单维度 → V3 应触发",
+      "question": "为什么销售额下降",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, SUM(line_revenue) FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "United Kingdom",
+          8187806.36
+        ]
+      },
+      "claims": [
+        {
+          "text": "United Kingdom 销售额 8187806.36",
+          "numbers": [
+            {
+              "value": 8187806.36,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "United Kingdom"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": true
+      },
+      "hard_note": "与 HO-HARD-07 成对照"
+    }
+  ]
+}

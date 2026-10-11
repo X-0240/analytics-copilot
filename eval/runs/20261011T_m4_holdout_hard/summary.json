@@ -1,0 +1,11 @@
+{
+  "cases": 8,
+  "claims": 8,
+  "unsupported_expected": 1,
+  "detected": 1,
+  "missed_unsupported_rate": 0.0,
+  "false_block_rate": 0.4286,
+  "claim_support_rate": 0.625,
+  "v3_cases": 1,
+  "v3_correct": 1
+}

@@ -1,0 +1,8 @@
+{"case_id": "HO-HARD-01", "purpose": "扰动 1.5%：在容差内，业务上可接受", "claims": 1, "got": [true], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "supported"}
+{"case_id": "HO-HARD-02", "purpose": "扰动 3%：超出容差，应判不支持", "claims": 1, "got": [false], "want": [false], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "unsupported"}
+{"case_id": "HO-HARD-03", "purpose": "中文写法是别名表外的国家（业务上支持，规则可能误拦）", "claims": 1, "got": [false], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "unsupported"}
+{"case_id": "HO-HARD-04", "purpose": "金额用「万」表述（业务上支持，机械匹配做不到）", "claims": 1, "got": [false], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "unsupported"}
+{"case_id": "HO-HARD-05", "purpose": "裸数字编号当成数据断言（业务上是编号，机械当数字）", "claims": 1, "got": [false], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "unsupported"}
+{"case_id": "HO-HARD-06", "purpose": "日期变体 2010/12 也应被剥离", "claims": 1, "got": [true], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "supported"}
+{"case_id": "HO-HARD-07", "purpose": "归因 + 双维度 → V3 不应触发", "claims": 1, "got": [true], "want": [true], "v3_fires": false, "v3_expected": false, "v3_correct": true, "status": "supported"}
+{"case_id": "HO-HARD-08", "purpose": "归因 + 单维度 → V3 应触发", "claims": 1, "got": [true], "want": [true], "v3_fires": true, "v3_expected": true, "v3_correct": true, "status": "partially_supported"}

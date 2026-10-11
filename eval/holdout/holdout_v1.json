@@ -1,0 +1,2247 @@
+{
+  "version": "holdout-v1",
+  "generated_by": "eval/holdout/gen_holdout.py",
+  "seed": 20261011,
+  "note": "期望判定由生成规则决定（非人工标注）；生成后即冻结，不得按结果调整规则",
+  "cases": [
+    {
+      "case_id": "HO-011",
+      "purpose": "声明的数值在结果里不存在",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "EIRE",
+          263276.82,
+          0.027
+        ]
+      },
+      "claims": [
+        {
+          "text": "EIRE 的销售额约 2045660.89",
+          "numbers": [
+            {
+              "value": 2045660.89,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "EIRE"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-056",
+      "purpose": "声明的来源步骤不存在",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-05-01 00:00:00",
+          738
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-05 的退货量为 738 件",
+          "numbers": [
+            {
+              "value": 738,
+              "step": 9
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-025",
+      "purpose": "数字与维度都来自结果",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Switzerland",
+          56385.35,
+          0.0058
+        ]
+      },
+      "claims": [
+        {
+          "text": "Switzerland 的销售额为 56385.35，占比 0.58%",
+          "numbers": [
+            {
+              "value": 56385.35,
+              "step": 1
+            },
+            {
+              "value": 0.0058,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Switzerland"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-035",
+      "purpose": "退货金额以绝对值表述，应判支持（有意放宽）",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "23843",
+          -168469.6
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 23843 的退货金额约 168469.6",
+          "numbers": [
+            {
+              "value": 168469.6,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-019",
+      "purpose": "声明的数值在结果里不存在",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "France",
+          197403.9,
+          0.0203
+        ]
+      },
+      "claims": [
+        {
+          "text": "France 的销售额约 1533828.3",
+          "numbers": [
+            {
+              "value": 1533828.3,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "France"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-027",
+      "purpose": "声明的数值在结果里不存在",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Switzerland",
+          56385.35,
+          0.0058
+        ]
+      },
+      "claims": [
+        {
+          "text": "Switzerland 的销售额约 438114.17",
+          "numbers": [
+            {
+              "value": 438114.17,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Switzerland"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-055",
+      "purpose": "日期数字不得被当成数据断言",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-05-01 00:00:00",
+          738
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-05 的退货量为 738 件",
+          "numbers": [
+            {
+              "value": 738,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-042",
+      "purpose": "点名的维度值不在结果里",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "POST",
+          -11871.24
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 UNKNOWN-9999 的退货金额最高，约 11871.24",
+          "numbers": [
+            {
+              "value": 11871.24,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "UNKNOWN-9999"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-006",
+      "purpose": "文本数字被扰动，与声明来源不符",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Netherlands",
+          284661.54,
+          0.0292
+        ]
+      },
+      "claims": [
+        {
+          "text": "Netherlands 的销售额为 327360.77（声明来源为真实值）",
+          "numbers": [
+            {
+              "value": 284661.54,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Netherlands"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-033",
+      "purpose": "退货金额以绝对值表述，应判支持（有意放宽）",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "AMAZONFEE",
+          -235281.59
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 AMAZONFEE 的退货金额约 235281.59",
+          "numbers": [
+            {
+              "value": 235281.59,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-038",
+      "purpose": "点名的维度值不在结果里",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "M",
+          -146784.46
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 UNKNOWN-9999 的退货金额最高，约 146784.46",
+          "numbers": [
+            {
+              "value": 146784.46,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "UNKNOWN-9999"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-054",
+      "purpose": "声明的来源步骤不存在",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-04-01 00:00:00",
+          745
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-04 的退货量为 745 件",
+          "numbers": [
+            {
+              "value": 745,
+              "step": 9
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-028",
+      "purpose": "含排名与编号等非数据断言数字，应仍判支持",
+      "question": "各国销售额前十",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Switzerland",
+          56385.35,
+          0.0058
+        ]
+      },
+      "claims": [
+        {
+          "text": "前 5 名里 Switzerland（编号 C-001）销售额为 56385.35",
+          "numbers": [
+            {
+              "value": 56385.35,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Switzerland"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-049",
+      "purpose": "日期数字不得被当成数据断言",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-02-01 00:00:00",
+          523
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-02 的退货量为 523 件",
+          "numbers": [
+            {
+              "value": 523,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-017",
+      "purpose": "数字与维度都来自结果",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "France",
+          197403.9,
+          0.0203
+        ]
+      },
+      "claims": [
+        {
+          "text": "France 的销售额为 197403.9，占比 2.03%",
+          "numbers": [
+            {
+              "value": 197403.9,
+              "step": 1
+            },
+            {
+              "value": 0.0203,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "France"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-053",
+      "purpose": "日期数字不得被当成数据断言",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-04-01 00:00:00",
+          745
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-04 的退货量为 745 件",
+          "numbers": [
+            {
+              "value": 745,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-021",
+      "purpose": "数字与维度都来自结果",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Australia",
+          137077.27,
+          0.0141
+        ]
+      },
+      "claims": [
+        {
+          "text": "Australia 的销售额为 137077.27，占比 1.41%",
+          "numbers": [
+            {
+              "value": 137077.27,
+              "step": 1
+            },
+            {
+              "value": 0.0141,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Australia"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-008",
+      "purpose": "含排名与编号等非数据断言数字，应仍判支持",
+      "question": "各国销售额前十",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Netherlands",
+          284661.54,
+          0.0292
+        ]
+      },
+      "claims": [
+        {
+          "text": "前 5 名里 Netherlands（编号 C-001）销售额为 284661.54",
+          "numbers": [
+            {
+              "value": 284661.54,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Netherlands"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-030",
+      "purpose": "文本数字被扰动，与声明来源不符",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Spain",
+          54774.58,
+          0.0056
+        ]
+      },
+      "claims": [
+        {
+          "text": "Spain 的销售额为 62990.77（声明来源为真实值）",
+          "numbers": [
+            {
+              "value": 54774.58,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Spain"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-007",
+      "purpose": "声明的数值在结果里不存在",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Netherlands",
+          284661.54,
+          0.0292
+        ]
+      },
+      "claims": [
+        {
+          "text": "Netherlands 的销售额约 2211820.17",
+          "numbers": [
+            {
+              "value": 2211820.17,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Netherlands"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-012",
+      "purpose": "含排名与编号等非数据断言数字，应仍判支持",
+      "question": "各国销售额前十",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "EIRE",
+          263276.82,
+          0.027
+        ]
+      },
+      "claims": [
+        {
+          "text": "前 5 名里 EIRE（编号 C-001）销售额为 263276.82",
+          "numbers": [
+            {
+              "value": 263276.82,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "EIRE"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-048",
+      "purpose": "声明的来源步骤不存在",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-01-01 00:00:00",
+          797
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-01 的退货量为 797 件",
+          "numbers": [
+            {
+              "value": 797,
+              "step": 9
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-040",
+      "purpose": "点名的维度值不在结果里",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "23166",
+          -77479.64
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 UNKNOWN-9999 的退货金额最高，约 77479.64",
+          "numbers": [
+            {
+              "value": 77479.64,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "UNKNOWN-9999"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-005",
+      "purpose": "数字与维度都来自结果",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Netherlands",
+          284661.54,
+          0.0292
+        ]
+      },
+      "claims": [
+        {
+          "text": "Netherlands 的销售额为 284661.54，占比 2.92%",
+          "numbers": [
+            {
+              "value": 284661.54,
+              "step": 1
+            },
+            {
+              "value": 0.0292,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Netherlands"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-037",
+      "purpose": "退货金额以绝对值表述，应判支持（有意放宽）",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "M",
+          -146784.46
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 M 的退货金额约 146784.46",
+          "numbers": [
+            {
+              "value": 146784.46,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-041",
+      "purpose": "退货金额以绝对值表述，应判支持（有意放宽）",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "POST",
+          -11871.24
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 POST 的退货金额约 11871.24",
+          "numbers": [
+            {
+              "value": 11871.24,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-020",
+      "purpose": "含排名与编号等非数据断言数字，应仍判支持",
+      "question": "各国销售额前十",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "France",
+          197403.9,
+          0.0203
+        ]
+      },
+      "claims": [
+        {
+          "text": "前 5 名里 France（编号 C-001）销售额为 197403.9",
+          "numbers": [
+            {
+              "value": 197403.9,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "France"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-036",
+      "purpose": "点名的维度值不在结果里",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "23843",
+          -168469.6
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 UNKNOWN-9999 的退货金额最高，约 168469.6",
+          "numbers": [
+            {
+              "value": 168469.6,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "UNKNOWN-9999"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-044",
+      "purpose": "点名的维度值不在结果里",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "22423",
+          -9722.55
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 UNKNOWN-9999 的退货金额最高，约 9722.55",
+          "numbers": [
+            {
+              "value": 9722.55,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "UNKNOWN-9999"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-026",
+      "purpose": "文本数字被扰动，与声明来源不符",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Switzerland",
+          56385.35,
+          0.0058
+        ]
+      },
+      "claims": [
+        {
+          "text": "Switzerland 的销售额为 64843.15（声明来源为真实值）",
+          "numbers": [
+            {
+              "value": 56385.35,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Switzerland"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-029",
+      "purpose": "数字与维度都来自结果",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Spain",
+          54774.58,
+          0.0056
+        ]
+      },
+      "claims": [
+        {
+          "text": "Spain 的销售额为 54774.58，占比 0.5599999999999999%",
+          "numbers": [
+            {
+              "value": 54774.58,
+              "step": 1
+            },
+            {
+              "value": 0.0056,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Spain"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-024",
+      "purpose": "含排名与编号等非数据断言数字，应仍判支持",
+      "question": "各国销售额前十",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Australia",
+          137077.27,
+          0.0141
+        ]
+      },
+      "claims": [
+        {
+          "text": "前 5 名里 Australia（编号 C-001）销售额为 137077.27",
+          "numbers": [
+            {
+              "value": 137077.27,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Australia"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-013",
+      "purpose": "数字与维度都来自结果",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Germany",
+          221698.21,
+          0.0227
+        ]
+      },
+      "claims": [
+        {
+          "text": "Germany 的销售额为 221698.21，占比 2.27%",
+          "numbers": [
+            {
+              "value": 221698.21,
+              "step": 1
+            },
+            {
+              "value": 0.0227,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Germany"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-010",
+      "purpose": "文本数字被扰动，与声明来源不符",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "EIRE",
+          263276.82,
+          0.027
+        ]
+      },
+      "claims": [
+        {
+          "text": "EIRE 的销售额为 302768.34（声明来源为真实值）",
+          "numbers": [
+            {
+              "value": 263276.82,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "EIRE"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-016",
+      "purpose": "含排名与编号等非数据断言数字，应仍判支持",
+      "question": "各国销售额前十",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Germany",
+          221698.21,
+          0.0227
+        ]
+      },
+      "claims": [
+        {
+          "text": "前 5 名里 Germany（编号 C-001）销售额为 221698.21",
+          "numbers": [
+            {
+              "value": 221698.21,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Germany"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-015",
+      "purpose": "声明的数值在结果里不存在",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Germany",
+          221698.21,
+          0.0227
+        ]
+      },
+      "claims": [
+        {
+          "text": "Germany 的销售额约 1722595.09",
+          "numbers": [
+            {
+              "value": 1722595.09,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Germany"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-047",
+      "purpose": "日期数字不得被当成数据断言",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-01-01 00:00:00",
+          797
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-01 的退货量为 797 件",
+          "numbers": [
+            {
+              "value": 797,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-002",
+      "purpose": "文本数字被扰动，与声明来源不符",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "United Kingdom",
+          8187806.36,
+          0.84
+        ]
+      },
+      "claims": [
+        {
+          "text": "United Kingdom 的销售额为 9415977.31（声明来源为真实值）",
+          "numbers": [
+            {
+              "value": 8187806.36,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "United Kingdom"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-050",
+      "purpose": "声明的来源步骤不存在",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-02-01 00:00:00",
+          523
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-02 的退货量为 523 件",
+          "numbers": [
+            {
+              "value": 523,
+              "step": 9
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-009",
+      "purpose": "数字与维度都来自结果",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "EIRE",
+          263276.82,
+          0.027
+        ]
+      },
+      "claims": [
+        {
+          "text": "EIRE 的销售额为 263276.82，占比 2.7%",
+          "numbers": [
+            {
+              "value": 263276.82,
+              "step": 1
+            },
+            {
+              "value": 0.027,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "EIRE"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-034",
+      "purpose": "点名的维度值不在结果里",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "AMAZONFEE",
+          -235281.59
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 UNKNOWN-9999 的退货金额最高，约 235281.59",
+          "numbers": [
+            {
+              "value": 235281.59,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "UNKNOWN-9999"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-039",
+      "purpose": "退货金额以绝对值表述，应判支持（有意放宽）",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "23166",
+          -77479.64
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 23166 的退货金额约 77479.64",
+          "numbers": [
+            {
+              "value": 77479.64,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-014",
+      "purpose": "文本数字被扰动，与声明来源不符",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Germany",
+          221698.21,
+          0.0227
+        ]
+      },
+      "claims": [
+        {
+          "text": "Germany 的销售额为 254952.94（声明来源为真实值）",
+          "numbers": [
+            {
+              "value": 221698.21,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Germany"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-051",
+      "purpose": "日期数字不得被当成数据断言",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-03-01 00:00:00",
+          833
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-03 的退货量为 833 件",
+          "numbers": [
+            {
+              "value": 833,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-043",
+      "purpose": "退货金额以绝对值表述，应判支持（有意放宽）",
+      "question": "退货金额最高的商品",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT stock_code, amount FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "22423",
+          -9722.55
+        ]
+      },
+      "claims": [
+        {
+          "text": "商品 22423 的退货金额约 9722.55",
+          "numbers": [
+            {
+              "value": 9722.55,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-046",
+      "purpose": "声明的来源步骤不存在",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2010-12-01 00:00:00",
+          798
+        ]
+      },
+      "claims": [
+        {
+          "text": "2010-12 的退货量为 798 件",
+          "numbers": [
+            {
+              "value": 798,
+              "step": 9
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-001",
+      "purpose": "数字与维度都来自结果",
+      "question": "各国销售额占比",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "United Kingdom",
+          8187806.36,
+          0.84
+        ]
+      },
+      "claims": [
+        {
+          "text": "United Kingdom 的销售额为 8187806.36，占比 84.0%",
+          "numbers": [
+            {
+              "value": 8187806.36,
+              "step": 1
+            },
+            {
+              "value": 0.84,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "United Kingdom"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-045",
+      "purpose": "日期数字不得被当成数据断言",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2010-12-01 00:00:00",
+          798
+        ]
+      },
+      "claims": [
+        {
+          "text": "2010-12 的退货量为 798 件",
+          "numbers": [
+            {
+              "value": 798,
+              "step": 1
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-052",
+      "purpose": "声明的来源步骤不存在",
+      "question": "月度退货量",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT DATE_TRUNC('month', invoice_ts) AS m, COUNT(*) AS n FROM v_returns GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "2011-03-01 00:00:00",
+          833
+        ]
+      },
+      "claims": [
+        {
+          "text": "2011-03 的退货量为 833 件",
+          "numbers": [
+            {
+              "value": 833,
+              "step": 9
+            }
+          ],
+          "dimension_values": []
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-031",
+      "purpose": "声明的数值在结果里不存在",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Spain",
+          54774.58,
+          0.0056
+        ]
+      },
+      "claims": [
+        {
+          "text": "Spain 的销售额约 425598.49",
+          "numbers": [
+            {
+              "value": 425598.49,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Spain"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-057",
+      "purpose": "归因问题 + 单维度 → V3 应触发",
+      "question": "为什么销售额下降",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "United Kingdom",
+          8187806.36,
+          0.84
+        ]
+      },
+      "claims": [
+        {
+          "text": "United Kingdom 的销售额为 8187806.36，占比 84.0%",
+          "numbers": [
+            {
+              "value": 8187806.36,
+              "step": 1
+            },
+            {
+              "value": 0.84,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "United Kingdom"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": true
+      }
+    },
+    {
+      "case_id": "HO-003",
+      "purpose": "声明的数值在结果里不存在",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "United Kingdom",
+          8187806.36,
+          0.84
+        ]
+      },
+      "claims": [
+        {
+          "text": "United Kingdom 的销售额约 63619255.42",
+          "numbers": [
+            {
+              "value": 63619255.42,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "United Kingdom"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-004",
+      "purpose": "含排名与编号等非数据断言数字，应仍判支持",
+      "question": "各国销售额前十",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "United Kingdom",
+          8187806.36,
+          0.84
+        ]
+      },
+      "claims": [
+        {
+          "text": "前 5 名里 United Kingdom（编号 C-001）销售额为 8187806.36",
+          "numbers": [
+            {
+              "value": 8187806.36,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "United Kingdom"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-018",
+      "purpose": "文本数字被扰动，与声明来源不符",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "France",
+          197403.9,
+          0.0203
+        ]
+      },
+      "claims": [
+        {
+          "text": "France 的销售额为 227014.48（声明来源为真实值）",
+          "numbers": [
+            {
+              "value": 197403.9,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "France"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-022",
+      "purpose": "文本数字被扰动，与声明来源不符",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Australia",
+          137077.27,
+          0.0141
+        ]
+      },
+      "claims": [
+        {
+          "text": "Australia 的销售额为 157638.86（声明来源为真实值）",
+          "numbers": [
+            {
+              "value": 137077.27,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Australia"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-058",
+      "purpose": "存在 0 行步骤 → V3 应触发",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [],
+        "2": [
+          "United Kingdom",
+          8187806.36,
+          0.84
+        ]
+      },
+      "claims": [
+        {
+          "text": "United Kingdom 占比 84.0%",
+          "numbers": [
+            {
+              "value": 0.84,
+              "step": 2
+            }
+          ],
+          "dimension_values": [
+            "United Kingdom"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": true
+      }
+    },
+    {
+      "case_id": "HO-023",
+      "purpose": "声明的数值在结果里不存在",
+      "question": "各国销售额",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Australia",
+          137077.27,
+          0.0141
+        ]
+      },
+      "claims": [
+        {
+          "text": "Australia 的销售额约 1065090.39",
+          "numbers": [
+            {
+              "value": 1065090.39,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Australia"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          false
+        ],
+        "v3_fires": false
+      }
+    },
+    {
+      "case_id": "HO-032",
+      "purpose": "含排名与编号等非数据断言数字，应仍判支持",
+      "question": "各国销售额前十",
+      "plan": {
+        "steps": [
+          {
+            "sql": "SELECT country, revenue, share FROM v_sales GROUP BY 1"
+          }
+        ]
+      },
+      "executed": {
+        "1": [
+          "Spain",
+          54774.58,
+          0.0056
+        ]
+      },
+      "claims": [
+        {
+          "text": "前 5 名里 Spain（编号 C-001）销售额为 54774.58",
+          "numbers": [
+            {
+              "value": 54774.58,
+              "step": 1
+            }
+          ],
+          "dimension_values": [
+            "Spain"
+          ]
+        }
+      ],
+      "expected": {
+        "supported": [
+          true
+        ],
+        "v3_fires": false
+      }
+    }
+  ]
+}
