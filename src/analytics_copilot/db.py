@@ -3,6 +3,8 @@
 import json
 import re
 from dataclasses import dataclass
+from datetime import date, datetime
+from decimal import Decimal
 
 import duckdb
 
@@ -85,7 +87,9 @@ def run_sql(sql, max_rows=None):
             "SELECT * FROM (%s) AS q LIMIT %d" % (text, max_rows + 1)
         )
         columns = [item[0] for item in cursor.description]
-        rows = [list(row) for row in cursor.fetchall()]
+        rows = [
+            [_jsonable(value) for value in row] for row in cursor.fetchall()
+        ]
     except duckdb.Error as exc:
         raise SqlRejected("BAD_SQL", "SQL 执行失败：%s" % exc) from exc
     finally:
@@ -97,3 +101,16 @@ def run_sql(sql, max_rows=None):
         truncated=truncated,
         sql=text,
     )
+
+
+def _jsonable(value):
+    """把 DuckDB 返回的特殊类型转成 JSON 可序列化的值。
+
+    DuckDB 的 ROUND() 返回 Decimal、时间列返回 datetime；这些直接进
+    `json.dumps` 会抛 TypeError（M1 实测踩到），因此在数据层统一归一化。
+    """
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat(sep=" ") if isinstance(value, datetime) else str(value)
+    return value

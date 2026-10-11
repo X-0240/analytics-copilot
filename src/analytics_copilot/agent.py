@@ -8,7 +8,7 @@ M0 的"理解"不是分类器，而是一组**可检查的状态谓词**（缺�
 import re
 from dataclasses import dataclass, field
 
-from analytics_copilot import config, tools
+from analytics_copilot import config, llm, planner, tools
 
 PERIOD_WORDS = ("最近", "近", "本月", "上月", "今年", "去年", "季度", "周", "月")
 COMPARE_WORDS = ("比", "对比", "相比", "下降", "上升", "增加", "减少", "原因")
@@ -46,6 +46,14 @@ class ClarifyNeeded(Exception):
         self.question = question
 
 
+class Refused(Exception):
+    """超出能力边界（预测/因果/无成本字段等）：明确拒答并给原因，不硬答。"""
+
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
+
+
 def understand(question):
     """规则版任务理解：只判断"缺什么"，不判断"属于哪一类"。"""
     text = question.strip()
@@ -71,13 +79,16 @@ def understand(question):
         if any(word in text for word in words)
     ]
     comparison = "对比" if any(w in text for w in COMPARE_WORDS) else ""
+    # 只有在问题本身要求"比较/拆解"时才把缺维度当成澄清理由；
+    # 单纯看趋势的问题不需要维度，默认按总量趋势回答并记假设。
+    needs_dimension = bool(comparison) or any(
+        word in text for word in ("哪个", "哪些", "主要", "拆解", "贡献", "排名", "前十")
+    )
     missing = []
     if not metric:
         missing.append("指标（看销售额、销量还是退货？）")
-    if not time_window:
-        missing.append("时间范围（最近多久？）")
-    if not dimensions and not comparison:
-        missing.append("分析维度或对比基准（按国家、商品还是客户看？）")
+    if not dimensions and needs_dimension:
+        missing.append("分析维度（按国家、商品还是客户看？）")
     return Understanding(
         question=text,
         metric=metric,
@@ -120,8 +131,14 @@ def plan(understanding):
     ]
 
 
-def analyze(question, session):
-    """跑完一次分析；`session` 用于记澄清轮数与假设。"""
+def analyze(question, session, client=None):
+    """跑完一次分析；`session` 用于记澄清轮数与假设。
+
+    两条路径共用前半段（理解 + 澄清预算），只在"规划"处分叉：
+    - 无 key / 桩：走 M0 的规则计划（离线可复现，测试默认走这条）；
+    - 有 key：走受控 LLM 规划（`planner`），SQL 仍受 M0 护栏约束。
+    """
+    client = client or planner.build_client()
     understanding = understand(question)
     if understanding.missing:
         if session["clarify_rounds"] < config.MAX_CLARIFY_ROUNDS:
@@ -135,6 +152,25 @@ def analyze(question, session):
         understanding.dimensions = understanding.dimensions or ["country"]
         understanding.metric = understanding.metric or "line_revenue"
 
+    if not understanding.time_window:
+        # 缺时间窗不澄清，按全部时间处理并显式记成假设
+        understanding.time_window = "全部时间（未指定，按 2010-12 ~ 2011-12）"
+        understanding.assumptions.append(understanding.time_window)
+
+    if isinstance(client, llm.StubLLM) or config.FORCE_STUB:
+        return _rule_path(question, understanding)
+    return _llm_path(client, question, understanding)
+
+
+def _rule_path(question, understanding):
+    """M0 的确定性路径：规则计划 + 规则结论（保持回归测试不变）。"""
+    hint = planner.scope_hint(question)
+    if hint:
+        # 能力边界（机械可判）：与 LLM 路径保持同一套拒答口径
+        raise Refused(
+            "问题涉及 %s，超出本项目能力边界：只做历史数据的探索/比较/异常/拆解，"
+            "不做预测与因果推断，且数据集没有成本字段。" % "、".join(hint)
+        )
     calls, checks, evidence = [], [], []
     top_share = None
     for step in plan(understanding):
@@ -169,12 +205,81 @@ def analyze(question, session):
         )
     confidence = "low" if (caveats or risky) else "medium"
     return {
+        "mode": "rule",
         "understanding": understanding,
         "conclusion": Conclusion(
             claim=claim, evidence=evidence, confidence=confidence, caveats=caveats
         ),
         "tool_calls": calls,
         "checks": checks,
+        "plan": {"scope": "ok", "steps": plan(understanding), "refuse_reason": ""},
+        "cost_cny": 0.0,
+    }
+
+
+def _llm_path(client, question, understanding):
+    """受控 LLM 路径：LLM 出计划与结论，护栏决定能不能执行。"""
+    plan_obj = planner.ask_plan(
+        client, question, understanding, understanding.assumptions
+    )
+    if plan_obj["scope"] == "refuse":
+        raise Refused(plan_obj["refuse_reason"])
+
+    executed, calls, checks, evidence = [], [], [], []
+    for step in plan_obj["steps"]:
+        result, step_checks, call = tools.sql_tool(step["sql"], step["name"])
+        calls.append(call)
+        checks.extend(step_checks)
+        row = {
+            "index": step["index"],
+            "name": step["name"],
+            "sql": step["sql"],
+            "columns": result.columns,
+            "rows": result.rows[:5],
+            "row_count": len(result.rows),
+            "checks": [
+                {"name": item.name, "ok": item.ok, "detail": item.detail}
+                for item in step_checks
+            ],
+        }
+        executed.append(row)
+        evidence.append(
+            {
+                "step": "%d %s" % (step["index"], step["name"]),
+                "sql": result.sql,
+                "columns": result.columns,
+                "sample_rows": result.rows[:3],
+                "row_count": len(result.rows),
+                "truncated": result.truncated,
+            }
+        )
+
+    conclusion_obj = planner.ask_conclusion(client, question, executed)
+    risky = [item for item in checks if not item.ok]
+    caveats = list(conclusion_obj["caveats"]) + [item.detail for item in risky]
+    caveats.extend(understanding.assumptions)
+    if any(item["truncated"] for item in evidence):
+        caveats.append("至少一步结果被截断，结论可能不完整")
+    # 机械优先：护栏发现问题时，不允许结论自称高置信
+    confidence = conclusion_obj["confidence"]
+    if risky and confidence in ("high", "medium"):
+        confidence = "low"
+    return {
+        "mode": "llm",
+        "understanding": understanding,
+        "conclusion": Conclusion(
+            claim=conclusion_obj["claim"],
+            evidence=evidence,
+            confidence=confidence,
+            caveats=caveats,
+        ),
+        "tool_calls": calls,
+        "checks": checks,
+        "plan": plan_obj,
+        "cited_steps": conclusion_obj["cited_steps"],
+        "cost_cny": round(
+            plan_obj.get("cost_cny", 0.0) + conclusion_obj.get("cost_cny", 0.0), 6
+        ),
     }
 
 

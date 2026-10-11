@@ -1,0 +1,25 @@
+{
+  "version": "m1-v1",
+  "split": "dev",
+  "note": "M1 验收任务集：12 个正常分析 + 3 个澄清 + 3 个拒答；全部为作者构造（构造人=作者），未经用户验证",
+  "tasks": [
+    {"task_id": "T-101", "kind": "normal", "type": "explore", "question": "最近三个月的销售额走势怎么样"},
+    {"task_id": "T-102", "kind": "normal", "type": "explore", "question": "各个国家的销售占比是多少"},
+    {"task_id": "T-103", "kind": "normal", "type": "explore", "question": "每个月有多少退货"},
+    {"task_id": "T-104", "kind": "normal", "type": "compare", "question": "英国和德国的销售额对比"},
+    {"task_id": "T-105", "kind": "normal", "type": "compare", "question": "德国和法国的退货量谁更多"},
+    {"task_id": "T-106", "kind": "normal", "type": "compare", "question": "哪个国家的平均单价更高"},
+    {"task_id": "T-107", "kind": "normal", "type": "anomaly", "question": "最近哪个国家的销售额下降最多"},
+    {"task_id": "T-108", "kind": "normal", "type": "anomaly", "question": "销售额最低的三个月是哪几个月"},
+    {"task_id": "T-109", "kind": "normal", "type": "anomaly", "question": "退货主要集中在哪些商品上"},
+    {"task_id": "T-110", "kind": "normal", "type": "decompose", "question": "销售额下降主要是哪个维度贡献的"},
+    {"task_id": "T-111", "kind": "normal", "type": "decompose", "question": "按商品维度拆解销售额前十名"},
+    {"task_id": "T-112", "kind": "normal", "type": "decompose", "question": "有客户编号和没有客户编号的销售额各占多少"},
+    {"task_id": "T-201", "kind": "clarify", "type": "missing_metric", "question": "最近情况怎么样"},
+    {"task_id": "T-202", "kind": "clarify", "type": "too_vague", "question": "帮我看一下数据"},
+    {"task_id": "T-203", "kind": "clarify", "type": "missing_both", "question": "哪个国家最好"},
+    {"task_id": "T-301", "kind": "refuse", "type": "forecast", "question": "预测下个月的销售额会是多少"},
+    {"task_id": "T-302", "kind": "refuse", "type": "causal", "question": "销售额下降的因果原因是什么"},
+    {"task_id": "T-303", "kind": "refuse", "type": "no_cost_field", "question": "哪个月的利润最高"}
+  ]
+}

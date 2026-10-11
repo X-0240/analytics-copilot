@@ -1,0 +1,28 @@
+{
+  "tasks": 18,
+  "answered": 15,
+  "asked_clarification": 7,
+  "refused": 3,
+  "errors": 0,
+  "answer_rate": 0.8333,
+  "trace_complete_rate": 0.8333,
+  "plan_present_rate": 0.8333,
+  "cost_cny_total": 0.0,
+  "acceptance": {
+    "normal_total": 12,
+    "normal_ok": 12,
+    "normal_pass": true,
+    "boundary_total": 6,
+    "boundary_ok": 6,
+    "boundary_pass": true,
+    "refused_expected": 3,
+    "refused_actual": 3
+  },
+  "todo_metrics": [
+    "结论支持率",
+    "误判率(holdout)",
+    "边界降级正确率",
+    "无验证层/有验证层对照"
+  ],
+  "run_id": "4c464312"
+}

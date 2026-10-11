@@ -27,7 +27,13 @@ from analytics_copilot import agent, config, db, tools
 app = FastAPI(title="Analytics Copilot (M0)", version="0.1.0")
 
 SESSIONS: dict[str, dict] = {}
-COUNTERS = {"requests": 0, "clarify": 0, "errors": 0, "timeouts": 0}
+COUNTERS = {
+    "requests": 0,
+    "clarify": 0,
+    "refused": 0,
+    "errors": 0,
+    "timeouts": 0,
+}
 
 
 class AskRequest(BaseModel):
@@ -101,6 +107,16 @@ async def ask(payload: AskRequest):
             "missing": exc.missing,
             "ask": exc.question,
         }
+    except agent.Refused as exc:
+        # 拒答是正常业务结果（超出能力边界），不是错误：HTTP 200 + 明确原因
+        COUNTERS["refused"] = COUNTERS.get("refused", 0) + 1
+        record.update({"status": "refused", "reason": exc.reason})
+        _log(record)
+        return {
+            "session_id": session_id,
+            "status": "refused",
+            "reason": exc.reason,
+        }
     except db.SqlRejected as exc:
         COUNTERS["errors"] += 1
         record.update({"status": "rejected", "code": exc.code})
@@ -126,7 +142,8 @@ async def ask(payload: AskRequest):
             "status": "answered",
             "elapsed_ms": elapsed_ms,
             "queries": len(queries),
-            "cost_cny": 0.0,
+            "mode": outcome.get("mode", "rule"),
+            "cost_cny": outcome.get("cost_cny", 0.0),
             "confidence": conclusion.confidence,
             "caveats": len(conclusion.caveats),
         }
@@ -135,10 +152,14 @@ async def ask(payload: AskRequest):
     return {
         "session_id": session_id,
         "status": "answered",
+        "mode": outcome.get("mode", "rule"),
         "claim": conclusion.claim,
         "confidence": conclusion.confidence,
         "caveats": conclusion.caveats,
         "evidence": conclusion.evidence,
+        "plan": outcome.get("plan", {}),
+        "cited_steps": outcome.get("cited_steps", []),
+        "cost_cny": outcome.get("cost_cny", 0.0),
         "checks": [
             {"name": item.name, "ok": item.ok, "detail": item.detail}
             for item in outcome["checks"]
