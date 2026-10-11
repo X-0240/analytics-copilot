@@ -12,6 +12,8 @@ V3 结果充分性：归因类问题只有单维度/无时间序列，或某步�
 import re
 from dataclasses import dataclass, field
 
+from analytics_copilot import explain
+
 NUMBER_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(%|％)?")
 # 这些数字不是"数据断言"，检查前先剔掉，否则会误拦（M2 实测到的假阳性）：
 #   1. 日期：2010-12 / 2011年12月 / 2011/01
@@ -60,6 +62,7 @@ class Verdict:
     violations: list = field(default_factory=list)
     status: str = "supported"
     caveats: list = field(default_factory=list)
+    explanation_level: int = 1
 
     def blocked(self):
         """被 V1/V2 拦下的违反（这些会让结论失去证据支持）。"""
@@ -207,6 +210,14 @@ def verify(question, plan, executed, claims):
     statuses, violations = verify_claims(claims, executed)
     extra, caveats = verify_sufficiency(question, plan, executed)
     violations.extend(extra)
+    # v1.1 新增：解释强度越界（V4）——降级 + 加边界措辞，不改写结论文本
+    level = explain.evidence_level(plan, executed)
+    over, level_caveats = explain.check_level(claims, level)
+    for index in over:
+        violations.append(
+            Violation("V4", "结论使用因果措辞，超出 Level %d 允许范围" % level, index)
+        )
+    caveats.extend(level_caveats)
     blocked = [item for item in violations if item.kind in ("V1", "V2")]
     all_blocked = blocked and all(not item["supported"] for item in statuses)
     if not claims or all_blocked:
@@ -224,4 +235,10 @@ def verify(question, plan, executed, claims):
         violations=violations,
         status=status,
         caveats=caveats,
+        explanation_level=level,
     )
+
+
+def level_violations(verdict):
+    """从判定里取出 V4（解释强度越界）。"""
+    return [item for item in verdict.violations if item.kind == "V4"]

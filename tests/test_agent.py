@@ -35,3 +35,117 @@ def test_understanding_is_predicates_not_categories():
     assert "country" in got.dimensions
     assert "指标（看销售额、销量还是退货？）" in got.missing
     assert not hasattr(got, "category")
+
+
+def test_execution_failure_degrades_to_unable_to_complete(monkeypatch):
+    """执行期 SQL 失败要降级为"无法完成"，不是系统错误。"""
+    from analytics_copilot import config, db, tools
+
+    def boom(sql, context=""):
+        raise db.SqlRejected("BAD_SQL", "列不存在")
+
+    monkeypatch.setattr(tools, "sql_tool", boom)
+    # 默认 AC_FORCE_STUB=1 会走确定性规则路径，这里显式打开 LLM 路径
+    monkeypatch.setattr(config, "FORCE_STUB", False)
+
+    class FakePlanClient:
+        name = "fake"
+
+        def complete_json(self, system, user, max_tokens=900):
+            import json as _json
+
+            payload = {
+                "scope": "ok",
+                "assumptions": [],
+                "steps": [{"name": "x", "purpose": "y", "sql": "SELECT 1 FROM v_sales"}],
+            }
+            return _json.dumps(
+                {"content": _json.dumps(payload, ensure_ascii=False), "cost_cny": 0}
+            )
+
+    with pytest.raises(agent.UnableToComplete):
+        agent.analyze("最近销售额", _session(), client=FakePlanClient())
+
+
+def test_causal_refusal_becomes_level2_answer(monkeypatch):
+    """因果类提问不再直接拒答：给证据允许的等级 + 固定边界措辞。"""
+    from analytics_copilot import config
+
+    monkeypatch.setattr(config, "FORCE_STUB", False)
+
+    class RefuseClient:
+        name = "fake"
+
+        def complete_json(self, system, user, max_tokens=900):
+            import json as _json
+
+            payload = {
+                "scope": "refuse",
+                "refuse_reason": "这是因果推断问题，超出能力边界",
+                "assumptions": [],
+                "steps": [],
+            }
+            return _json.dumps(
+                {"content": _json.dumps(payload, ensure_ascii=False), "cost_cny": 0}
+            )
+
+    outcome = agent.analyze(
+        "最近三个月销售额为什么下降？按国家看", _session(), client=RefuseClient()
+    )
+    assert outcome["mode"] == "llm_causal_fallback"
+    assert outcome["explanation_level"] in (1, 2)
+    assert outcome["conclusion"].confidence == "low"
+    caveats = " ".join(outcome["conclusion"].caveats)
+    assert "不能证明因果" in caveats
+
+
+def test_broken_conclusion_json_degrades_to_unable_to_complete(monkeypatch):
+    """结论 JSON 解析失败也走结构化降级（与计划失败同一口径）。"""
+    from analytics_copilot import config
+
+    monkeypatch.setattr(config, "FORCE_STUB", False)
+
+    class BrokenConclusionClient:
+        name = "fake"
+
+        def __init__(self):
+            self.calls = 0
+
+        def complete_json(self, system, user, max_tokens=900):
+            import json as _json
+
+            self.calls += 1
+            if self.calls == 1:
+                payload = {
+                    "scope": "ok",
+                    "assumptions": [],
+                    "steps": [
+                        {
+                            "name": "总量趋势",
+                            "purpose": "看走势",
+                            "sql": (
+                                "SELECT DATE_TRUNC('month', invoice_ts) AS month, "
+                                "ROUND(SUM(line_revenue), 2) AS value FROM v_sales "
+                                "GROUP BY 1 ORDER BY 1"
+                            ),
+                        }
+                    ],
+                }
+                content = _json.dumps(payload, ensure_ascii=False)
+            else:
+                content = "{这不是合法 JSON"
+            return _json.dumps({"content": content, "cost_cny": 0})
+
+    with pytest.raises(agent.UnableToComplete):
+        agent.analyze(
+            "最近三个月销售额走势怎么样", _session(), client=BrokenConclusionClient()
+        )
+
+
+def test_rule_path_carries_level_boundary_wording():
+    """无 key 的规则路径同样受等级约束：Level 2 必须带固定边界措辞。"""
+    outcome = agent.analyze("最近三个月销售额走势怎么样", _session())
+    caveats = " ".join(outcome["conclusion"].caveats)
+    if outcome["explanation_level"] == 2:
+        assert "不能证明因果关系" in caveats
+    assert "不支持因果结论" in caveats

@@ -102,6 +102,8 @@ def run_task(task, verify_layer=True):
         "claim_status": (outcome.get("verification") or {}).get(
             "claim_status", []
         ),
+        "explanation_level": outcome.get("explanation_level", 1),
+        "level_violations": len(outcome.get("level_violations") or []),
         "blocked": (outcome.get("verification") or {}).get("blocked", 0),
         "downgraded": (outcome.get("verification") or {}).get("downgraded", 0),
         "strong_claim": conclusion.confidence in ("high", "medium"),
@@ -322,6 +324,16 @@ def _verification_stats(rows):
         "unsupported_runs": len(
             [row for row in answered if row.get("verify_status") == "unsupported"]
         ),
+        "level2_runs": len(
+            [row for row in answered if row.get("explanation_level") == 2]
+        ),
+        "level1_runs": len(
+            [row for row in answered if row.get("explanation_level") == 1]
+        ),
+        "level_violations": sum(
+            row.get("level_violations") or 0 for row in answered
+        ),
+        "caveats_total": sum(row.get("caveats") or 0 for row in answered),
     }
 
 

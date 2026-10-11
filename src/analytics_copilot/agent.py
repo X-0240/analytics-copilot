@@ -5,10 +5,11 @@ M0 的"理解"不是分类器，而是一组**可检查的状态谓词**（缺�
 与计划（M0 用确定性桩，接真实模型时替换 `StubLLM` 即可）。
 """
 
+import json
 import re
 from dataclasses import dataclass, field
 
-from analytics_copilot import config, db, llm, planner, tools, verifier
+from analytics_copilot import config, db, explain, llm, planner, tools, verifier
 
 PERIOD_WORDS = ("最近", "近", "本月", "上月", "今年", "去年", "季度", "周", "月")
 COMPARE_WORDS = ("比", "对比", "相比", "下降", "上升", "增加", "减少", "原因")
@@ -213,6 +214,14 @@ def _rule_path(question, understanding):
             "最大维度占比不足 50%，结论不能只看单一因素（可能存在更大量级因素）"
         )
     confidence = "low" if (caveats or risky) else "medium"
+    rule_plan = plan(understanding)
+    level = explain.evidence_level(
+        {"steps": rule_plan},
+        [{"row_count": ev["row_count"]} for ev in evidence],
+    )
+    # v1.1：等级边界措辞对所有出口生效（含无 key 的规则路径），
+    # 否则 Level 2 的结论会缺"不能证明因果关系"这句必须有的声明。
+    caveats.extend(explain.level_caveats(level))
     return {
         "mode": "rule",
         "understanding": understanding,
@@ -221,7 +230,9 @@ def _rule_path(question, understanding):
         ),
         "tool_calls": calls,
         "checks": checks,
-        "plan": {"scope": "ok", "steps": plan(understanding), "refuse_reason": ""},
+        "plan": {"scope": "ok", "steps": rule_plan, "refuse_reason": ""},
+        "explanation_level": level,
+        "level_violations": [],
         "cost_cny": 0.0,
     }
 
@@ -232,17 +243,28 @@ def _llm_path(client, question, understanding, verify_layer=True):
         plan_obj = planner.ask_plan(
             client, question, understanding, understanding.assumptions
         )
-    except (planner.PlanInvalid, db.SqlRejected) as exc:
+    except (planner.PlanInvalid, db.SqlRejected, json.JSONDecodeError) as exc:
         # 修不好就不再抛异常：给用户一个明确的"我做不到 + 原因"
         raise UnableToComplete(
             "两次都没能生成可执行的分析计划：%s" % exc
         ) from exc
     if plan_obj["scope"] == "refuse":
+        if explain.is_causal_topic(question, plan_obj["refuse_reason"]):
+            # 因果类提问不允许直接拒答（v1.1）：改走确定性计划，
+            # 只给证据允许的事实与相关变化，并强制附加边界措辞。
+            return _causal_fallback(question, understanding, plan_obj)
         raise Refused(plan_obj["refuse_reason"])
 
     executed, calls, checks, evidence = [], [], [], []
     for step in plan_obj["steps"]:
-        result, step_checks, call = tools.sql_tool(step["sql"], step["name"])
+        try:
+            result, step_checks, call = tools.sql_tool(step["sql"], step["name"])
+        except db.SqlRejected as exc:
+            # 执行期才暴露的 SQL 问题（列不存在、类型不匹配等）同样按"做不到"降级，
+            # 不让用户体验到系统错误。
+            raise UnableToComplete(
+                "查询执行失败（第 %d 步）：%s" % (step["index"], exc)
+            ) from exc
         calls.append(call)
         checks.extend(step_checks)
         row = {
@@ -271,7 +293,7 @@ def _llm_path(client, question, understanding, verify_layer=True):
 
     try:
         conclusion_obj = planner.ask_conclusion(client, question, executed)
-    except planner.PlanInvalid as exc:
+    except (planner.PlanInvalid, json.JSONDecodeError) as exc:
         raise UnableToComplete("结论输出不合法：%s" % exc) from exc
     risky = [item for item in checks if not item.ok]
     caveats = list(conclusion_obj["caveats"]) + [item.detail for item in risky]
@@ -280,17 +302,27 @@ def _llm_path(client, question, understanding, verify_layer=True):
         caveats.append("至少一步结果被截断，结论可能不完整")
     claims = conclusion_obj["claims"]
     verdict = None
+    level_violations = []
     if verify_layer:
         # 验证层 v1：逐条机械判定结论是否被证据支持
         verdict = verifier.verify(question, plan_obj, executed, claims)
         caveats.extend(verdict.caveats)
+        level_violations = [
+            {"claim": item.claim_index, "detail": item.detail}
+            for item in verifier.level_violations(verdict)
+        ]
     # 机械优先：护栏或验证层发现问题时，不允许结论自称高置信
     confidence = conclusion_obj["confidence"]
-    if (risky or (verdict and verdict.blocked())) and confidence in (
+    if (risky or (verdict and verdict.blocked()) or level_violations) and confidence in (
         "high",
         "medium",
     ):
         confidence = "low"
+    if level_violations:
+        # 解释强度越界：不重写结论，但必须显式说明只支持到哪一级
+        caveats.append("结论中的因果措辞已被降级处理，本次只支持到 Level %d" % (
+            verdict.explanation_level if verdict else 1
+        ))
     claim_text = conclusion_obj["claim"]
     if verdict and verdict.status == "unsupported":
         # 拿不到证据支持时**不输出强结论**，只说明现状与缺什么
@@ -314,6 +346,10 @@ def _llm_path(client, question, understanding, verify_layer=True):
         # 供评测层离线复评（服务层不返回这个内部字段）
         "executed": executed,
         "claims": claims,
+        "explanation_level": verdict.explanation_level if verdict else explain.evidence_level(
+            plan_obj, executed
+        ),
+        "level_violations": level_violations,
         "verification": (
             {
                 "status": verdict.status,
@@ -328,6 +364,69 @@ def _llm_path(client, question, understanding, verify_layer=True):
         "cost_cny": round(
             plan_obj.get("cost_cny", 0.0) + conclusion_obj.get("cost_cny", 0.0), 6
         ),
+    }
+
+
+def _causal_fallback(question, understanding, plan_obj):
+    """因果类提问的确定性兜底：不给因果结论，只给证据允许的事实与相关变化。
+
+    为什么不让 LLM 再试一次：模型在因果类问题上倾向于直接拒答（实测两次），
+    继续追问反而浪费调用；这里用规则计划保证"至少给到 Level 1/2 的可核查结论"，
+    并把边界措辞写死。
+    """
+    rule_steps = plan(understanding)
+    executed, evidence, checks, calls = [], [], [], []
+    for step in rule_steps:
+        result, step_checks, call = tools.sql_tool(step["sql"], step["name"])
+        checks.extend(step_checks)
+        calls.append(call)
+        executed.append(
+            {
+                "index": len(executed) + 1,
+                "rows": result.rows,
+                "row_count": len(result.rows),
+            }
+        )
+        evidence.append(
+            {
+                "step": step["name"],
+                "sql": result.sql,
+                "columns": result.columns,
+                "sample_rows": result.rows[:3],
+                "row_count": len(result.rows),
+                "truncated": result.truncated,
+            }
+        )
+    level = explain.evidence_level({"steps": rule_steps}, executed)
+    top = executed[-1]["rows"][0] if executed and executed[-1]["rows"] else None
+    claim = (
+        "本次只做事实与相关变化描述：%s"
+        % (
+            "最大维度是 %s（值 %s）" % (top[0], top[1])
+            if top
+            else "未取到可用维度结果"
+        )
+    )
+    caveats = [
+        "模型原判为拒答（%s），按 v1.1 因果类提问不允许直接拒答，已改为给出证据允许的层级"
+        % plan_obj["refuse_reason"]
+    ]
+    caveats.extend(explain.level_caveats(level))
+    caveats.extend(understanding.assumptions)
+    return {
+        "mode": "llm_causal_fallback",
+        "understanding": understanding,
+        "conclusion": Conclusion(
+            claim=claim, evidence=evidence, confidence="low", caveats=caveats
+        ),
+        "tool_calls": calls,
+        "checks": checks,
+        "plan": {"scope": "ok", "steps": rule_steps, "refuse_reason": ""},
+        "executed": executed,
+        "claims": [],
+        "explanation_level": level,
+        "level_violations": [],
+        "cost_cny": round(plan_obj.get("cost_cny", 0.0), 6),
     }
 
 

@@ -178,6 +178,8 @@ async def ask(payload: AskRequest):
         "plan": outcome.get("plan", {}),
         "claims": outcome.get("claims", []),
         "verification": outcome.get("verification", {"status": "not_run"}),
+        "explanation_level": outcome.get("explanation_level", 1),
+        "level_violations": outcome.get("level_violations", []),
         "cost_cny": outcome.get("cost_cny", 0.0),
         "checks": [
             {"name": item.name, "ok": item.ok, "detail": item.detail}

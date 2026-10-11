@@ -15,7 +15,10 @@ import re
 from analytics_copilot import db, llm
 
 MAX_STEPS = 4
-REFUSE_WORDS = ("预测", "预计", "因果", "利润", "毛利", "成本")
+# 硬拒答只留"做不到"的：预测、以及没有成本字段的利润类问题。
+# "因果"不再作为拒答理由——按 v1.1，因果类提问允许做数据一致性验证，
+# 但结论受解释等级约束（禁止下因果结论），见 explain.py。
+REFUSE_WORDS = ("预测", "预计", "利润", "毛利", "成本")
 
 PLANNER_SYSTEM = """你是数据分析规划器，只输出 JSON，不要解释。
 可用对象：只读视图 v_sales（口径列：line_revenue=销售额含退货为负、is_return=退货、

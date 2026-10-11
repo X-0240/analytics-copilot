@@ -1,0 +1,43 @@
+{
+  "tasks": 18,
+  "answered": 10,
+  "asked_clarification": 7,
+  "refused": 5,
+  "unable_to_complete": 1,
+  "errors": 2,
+  "answer_rate": 0.5556,
+  "trace_complete_rate": 0.5556,
+  "plan_present_rate": 0.5556,
+  "cost_cny_total": 0.055118,
+  "acceptance": {
+    "normal_total": 12,
+    "normal_ok": 9,
+    "normal_pass": true,
+    "boundary_total": 6,
+    "boundary_ok": 6,
+    "boundary_pass": true,
+    "refused_expected": 3,
+    "refused_actual": 3
+  },
+  "verification": {
+    "answered": 10,
+    "claims_total": 38,
+    "claims_supported": 31,
+    "claim_support_rate": 0.8158,
+    "blocked": 11,
+    "downgraded": 1,
+    "strong_claims": 6,
+    "unsupported_runs": 2,
+    "level2_runs": 2,
+    "level1_runs": 8,
+    "level_violations": 0,
+    "caveats_total": 51
+  },
+  "todo_metrics": [
+    "结论支持率",
+    "误拦截率与漏放率（需独立判定者，按纪律不用 LLM judge）",
+    "边界降级正确率（holdout）"
+  ],
+  "verify_layer": true,
+  "run_id": "2c5e0231"
+}
