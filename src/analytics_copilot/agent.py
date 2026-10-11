@@ -9,7 +9,16 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from analytics_copilot import config, db, explain, llm, planner, tools, verifier
+from analytics_copilot import (
+    config,
+    db,
+    explain,
+    llm,
+    planner,
+    tools,
+    verifier,
+    window,
+)
 
 PERIOD_WORDS = ("最近", "近", "本月", "上月", "今年", "去年", "季度", "周", "月")
 COMPARE_WORDS = ("比", "对比", "相比", "下降", "上升", "增加", "减少", "原因")
@@ -22,6 +31,8 @@ class Understanding:
     question: str
     metric: str = ""
     time_window: str = ""
+    # 可解析的时间窗短语（如「最近三个月」）；空串表示没有明确窗口
+    window_request: str = ""
     dimensions: list[str] = field(default_factory=list)
     comparison_basis: str = ""
     missing: list[str] = field(default_factory=list)
@@ -82,6 +93,7 @@ def understand(question):
     time_window = next(
         (word for word in PERIOD_WORDS if word in text), ""
     )
+    window_request = window.requested_window(text)
     dimensions = [
         name
         for name, words in (
@@ -106,14 +118,28 @@ def understand(question):
         question=text,
         metric=metric,
         time_window=time_window,
+        window_request=window_request,
         dimensions=dimensions,
         comparison_basis=comparison,
         missing=missing,
     )
 
 
-def plan(understanding):
-    """把理解结果变成 1–3 条只读查询（M0 只覆盖两类常见问法）。"""
+def resolve_window(understanding):
+    """解析时间窗；解析不出来时返回"全期"口径对象（口径必须显式，不猜）。"""
+    profile = (db.load_metadata() or {}).get("profile") or {}
+    resolved = window.resolve(
+        understanding.window_request or understanding.question, profile
+    )
+    return resolved or window.full_period(profile)
+
+
+def plan(understanding, win=None):
+    """把理解结果变成 1–3 条只读查询（M0 只覆盖两类常见问法）。
+
+    `win` 是 `window.resolve()` 的结果：有时间窗时两个步骤都要带过滤，
+    占比分母也必须用同一过滤条件，否则占比合计不等于 1。
+    """
     metric = understanding.metric or "line_revenue"
     if metric == "return":
         metric_expr = "COUNT(*)"
@@ -122,13 +148,16 @@ def plan(understanding):
         metric_expr = "SUM(%s)" % metric
         source = "v_sales"
     dimension = (understanding.dimensions or ["country"])[0]
+    where = window.where_clause(win)
+    filtered = (" WHERE " + where) if where else ""
+    denominator = "SELECT SUM(line_revenue) FROM v_sales" + filtered
     return [
         {
             "name": "总量趋势",
             "sql": (
                 "SELECT DATE_TRUNC('month', invoice_ts) AS month, "
-                "ROUND(%s, 2) AS value FROM %s GROUP BY 1 ORDER BY 1"
-                % (metric_expr, source)
+                "ROUND(%s, 2) AS value FROM %s%s GROUP BY 1 ORDER BY 1"
+                % (metric_expr, source, filtered)
             ),
         },
         {
@@ -136,9 +165,9 @@ def plan(understanding):
             # 不加 LIMIT：占比合计要能对上 1；行数上限由工具层统一兜住
             "sql": (
                 "SELECT %s AS dimension_value, ROUND(SUM(line_revenue), 2) AS value, "
-                "ROUND(SUM(line_revenue) / (SELECT SUM(line_revenue) FROM v_sales), 4) "
-                "AS share FROM v_sales GROUP BY 1 ORDER BY value DESC"
-                % dimension
+                "ROUND(SUM(line_revenue) / (%s), 4) "
+                "AS share FROM v_sales%s GROUP BY 1 ORDER BY value DESC"
+                % (dimension, denominator, filtered)
             ),
         },
     ]
@@ -196,9 +225,10 @@ def _rule_path(question, understanding):
             "问题涉及 %s，超出本项目能力边界：只做历史数据的探索/比较/异常/拆解，"
             "不做预测与因果推断，且数据集没有成本字段。" % "、".join(hint)
         )
+    win = resolve_window(understanding)
     calls, checks, evidence = [], [], []
     top_share = None
-    for step in plan(understanding):
+    for step in plan(understanding, win):
         result, step_checks, call = tools.sql_tool(step["sql"], step["name"])
         calls.append(call)
         checks.extend(step_checks)
@@ -216,7 +246,9 @@ def _rule_path(question, understanding):
             top_share = (result.rows[0][0], result.rows[0][2])
 
     risky = [item for item in checks if not item.ok]
-    caveats = [item.detail for item in risky] + understanding.assumptions
+    # 口径必须显式：SQL 用的窗口与答案写的窗口来自同一个对象
+    caveats = [window.describe(win)] + [item.detail for item in risky]
+    caveats.extend(understanding.assumptions)
     if top_share:
         claim = "第一大贡献维度是 %s，占比 %.1f%%" % (
             top_share[0],
@@ -229,7 +261,7 @@ def _rule_path(question, understanding):
             "最大维度占比不足 50%，结论不能只看单一因素（可能存在更大量级因素）"
         )
     confidence = "low" if (caveats or risky) else "medium"
-    rule_plan = plan(understanding)
+    rule_plan = plan(understanding, win)
     level = explain.evidence_level(
         {"steps": rule_plan},
         [{"row_count": ev["row_count"]} for ev in evidence],
@@ -246,6 +278,7 @@ def _rule_path(question, understanding):
         "tool_calls": calls,
         "checks": checks,
         "plan": {"scope": "ok", "steps": rule_plan, "refuse_reason": ""},
+        "time_window": win,
         "explanation_level": level,
         "level_violations": [],
         "cost_cny": 0.0,
@@ -254,9 +287,10 @@ def _rule_path(question, understanding):
 
 def _llm_path(client, question, understanding, verify_layer=True, meter=None):
     """受控 LLM 路径：LLM 出计划与结论，护栏决定能不能执行。"""
+    win = resolve_window(understanding)
     try:
         plan_obj = planner.ask_plan(
-            client, question, understanding, understanding.assumptions
+            client, question, understanding, understanding.assumptions, win
         )
     except (planner.PlanInvalid, db.SqlRejected, json.JSONDecodeError) as exc:
         # 修不好就不再抛异常：给用户一个明确的"我做不到 + 原因"
@@ -320,6 +354,17 @@ def _llm_path(client, question, understanding, verify_layer=True, meter=None):
     risky = [item for item in checks if not item.ok]
     caveats = list(conclusion_obj["caveats"]) + [item.detail for item in risky]
     caveats.extend(understanding.assumptions)
+    # 时间窗口径：计划里没有 invoice_ts 过滤就如实说明，别让用户以为已经过滤
+    if win.get("applied"):
+        sqls = " ".join(str(step.get("sql", "")) for step in plan_obj["steps"]).lower()
+        if "invoice_ts" in sqls:
+            caveats.append(window.describe(win))
+        else:
+            caveats.append(
+                "计划没有按“%s”过滤时间窗，下面的结果覆盖全期" % win["requested"]
+            )
+    else:
+        caveats.append(window.describe(win))
     if any(item["truncated"] for item in evidence):
         caveats.append("至少一步结果被截断，结论可能不完整")
     claims = conclusion_obj["claims"]
@@ -399,7 +444,8 @@ def _causal_fallback(question, understanding, plan_obj):
     2. **走同一套验证层**（V1/V2/V3/V4），兜底回答不再享有"免检"；
     3. **写清口径与下一步**——不丢下一句"我不能回答"就走。
     """
-    rule_steps = plan(understanding)
+    win = resolve_window(understanding)
+    rule_steps = plan(understanding, win)
     executed, evidence, checks, calls = [], [], [], []
     for step in rule_steps:
         result, step_checks, call = tools.sql_tool(step["sql"], step["name"])
@@ -434,10 +480,9 @@ def _causal_fallback(question, understanding, plan_obj):
     ]
     caveats.extend(verdict.caveats)
     caveats.append(
-        "口径：以上事实为全期（2010-12 ~ 2011-12）汇总，"
-        "规则计划当前不按“最近 N 个月”过滤时间窗"
+        window.describe(win)
     )
-    partial = _partial_month_caveat(executed)
+    partial = _partial_month_caveat(executed, win)
     if partial:
         caveats.append(partial)
     caveats.extend(understanding.assumptions)
@@ -451,6 +496,7 @@ def _causal_fallback(question, understanding, plan_obj):
         "tool_calls": calls,
         "checks": checks,
         "plan": {"scope": "ok", "steps": rule_steps, "refuse_reason": ""},
+        "time_window": win,
         "executed": executed,
         "claims": claims,
         "next_questions": _next_questions(understanding),
@@ -470,7 +516,7 @@ METRIC_LABELS = {"line_revenue": "销售额", "return": "退货量"}
 DIMENSION_LABELS = {"country": "国家", "stock_code": "商品", "customer_id": "客户"}
 
 
-def _partial_month_caveat(executed):
+def _partial_month_caveat(executed, win=None):
     """末月不完整时必须提醒：否则月度首末对比会被读成"暴跌"。
 
     数据集到 2011-12-09 为止，12 月只有 9 天，合计天然偏小。
@@ -478,6 +524,14 @@ def _partial_month_caveat(executed):
     """
     if not executed or not executed[0].get("rows"):
         return None
+    if win and win.get("applied"):
+        # 窗口已经算过完整性，直接用它，避免出现"SQL 一个口径、提醒另一个口径"
+        if win.get("complete_period"):
+            return None
+        return (
+            "口径提醒：本次窗口的末月只统计到 %s，该月不是完整月（合计天然偏小），"
+            "不能用它的低值判断“下降”" % str(win.get("anchor_value"))[:10]
+        )
     profile = db.load_metadata().get("profile") or {}
     ts_max = str(profile.get("ts_max") or "")
     month_row = executed[0]["rows"][-1]

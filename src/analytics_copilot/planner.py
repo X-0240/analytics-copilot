@@ -30,7 +30,10 @@ invoice_ts=时间、country/stock_code/customer_id=维度）与 v_returns（仅�
 1. 每条 sql 必须是单条 SELECT，只引用 v_sales / v_returns；
 2. 最多 4 步；步骤名用中文短名；
 3. 判断预测、因果、利润相关的问题 → scope=refuse 并写明原因；
-4. 不要输出 markdown 代码块。"""
+4. 若输入给了 `time_window_to_apply.resolved_range`，**每一步都必须**用
+   `invoice_ts >= DATE '起点' AND invoice_ts <= TIMESTAMP '终点'` 过滤，
+   且占比类计算的分母也要用同一过滤条件；没有给就不要自己加时间条件；
+5. 不要输出 markdown 代码块。"""
 
 CONCLUSION_SYSTEM = """你是分析结论撰写者，只输出 JSON。
 输入会给出已执行的步骤编号、SQL 与结果片段。
@@ -111,9 +114,21 @@ def _validate_plan(plan_obj):
     }
 
 
-def ask_plan(client, question, understanding, assumptions):
-    """让 LLM 出计划；失败只重试一次（与项目三的 SCHEMA_INVALID 策略一致）。"""
+def ask_plan(client, question, understanding, assumptions, time_window=None):
+    """让 LLM 出计划；失败只重试一次（与项目三的 SCHEMA_INVALID 策略一致）。
+
+    `time_window` 是 `window.resolve()` 的结果：已生效时把它写进提示，
+    并要求 SQL 用它过滤；不生效（None/全期）时不提时间窗，避免模型自己编一个。
+    """
     hint = scope_hint(question)
+    payload_window = {}
+    if time_window and time_window.get("applied"):
+        payload_window = {
+            "requested": time_window["requested"],
+            "resolved_range": time_window["resolved_range"],
+            "end_timestamp": time_window["end_timestamp"],
+            "must_filter_with": "invoice_ts",
+        }
     user = json.dumps(
         {
             "question": question,
@@ -124,6 +139,7 @@ def ask_plan(client, question, understanding, assumptions):
                 "comparison_basis": understanding.comparison_basis,
             },
             "assumptions": assumptions,
+            "time_window_to_apply": payload_window,
             "out_of_scope_hint": hint,
         },
         ensure_ascii=False,

@@ -506,6 +506,8 @@ async def ask(payload: AskRequest, request: Request):
         "verification": outcome.get("verification", {"status": "not_run"}),
         "explanation_level": outcome.get("explanation_level", 1),
         "level_violations": outcome.get("level_violations", []),
+        # 口径（含本次时间窗解析结果）：SQL 与答案同源，供前端展示与复核
+        "time_window": outcome.get("time_window", {}),
         "next_questions": outcome.get("next_questions", []),
         "cost_cny": cost,
         "checks": [

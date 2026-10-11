@@ -140,6 +140,15 @@ def test_demo_token_absent_means_open(monkeypatch):
     assert client.get("/healthz").json()["auth_required"] is False
 
 
+def test_response_exposes_time_window():
+    """口径要能从接口读到（与 SQL 用的是同一个对象）。"""
+    body = client.post(
+        "/ask", json={"question": "最近三个月销售额为什么下降？按国家看"}
+    ).json()
+    assert body["time_window"]["requested"] == "最近三个月"
+    assert body["time_window"]["resolved_range"] == ["2011-10-01", "2011-12-09"]
+
+
 def test_budget_breaker_blocks_when_spent(monkeypatch):
     monkeypatch.setattr(config, "DAILY_COST_BUDGET_CNY", 1.0)
     service.RUNTIME["cost_today"] = 1.5

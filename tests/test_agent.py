@@ -185,3 +185,23 @@ def test_causal_fallback_gives_checkable_facts_and_next_steps(monkeypatch):
     assert "不能证明因果" in caveats
     assert "口径" in caveats
     assert len(outcome["next_questions"]) == 2
+
+
+def test_time_window_is_applied_to_sql_and_declared():
+    """「最近三个月」必须进 SQL，并且口径写进答案（P0-1）。"""
+    outcome = agent.analyze("最近三个月销售额为什么下降？按国家看", _session())
+    sqls = " ".join(step["sql"] for step in outcome["plan"]["steps"])
+    assert "invoice_ts" in sqls
+    assert "2011-10-01" in sqls
+    assert outcome["time_window"]["applied"] is True
+    caveats = " ".join(outcome["conclusion"].caveats)
+    assert "2011-10-01" in caveats and "末月不完整" in caveats
+
+
+def test_vague_recent_stays_full_period():
+    """只有「最近」时不加时间过滤（避免误伤对比类问题），但口径要如实声明。"""
+    outcome = agent.analyze("最近哪个国家的销售额下降最多？", _session())
+    sqls = " ".join(step["sql"] for step in outcome["plan"]["steps"])
+    assert outcome["time_window"]["applied"] is False
+    assert "invoice_ts >= DATE" not in sqls
+    assert "全期" in " ".join(outcome["conclusion"].caveats)
