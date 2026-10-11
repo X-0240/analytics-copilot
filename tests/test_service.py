@@ -118,6 +118,28 @@ def test_rate_limit_blocks_burst(monkeypatch):
     assert second.json()["code"] == "RATE_LIMITED"
 
 
+def test_demo_token_required_when_configured(monkeypatch):
+    """配了访问码就必须带对；不带或带错一律 401。"""
+    monkeypatch.setattr(config, "DEMO_TOKEN", "demo-secret")
+    body = {"question": "最近销售额怎么样"}
+    assert client.post("/ask", json=body).status_code == 401
+    assert client.post(
+        "/ask", json=body, headers={"Authorization": "Bearer wrong"}
+    ).status_code == 401
+    ok = client.post(
+        "/ask", json=body, headers={"Authorization": "Bearer demo-secret"}
+    )
+    assert ok.status_code == 200
+    assert client.get("/healthz").json()["auth_required"] is True
+
+
+def test_demo_token_absent_means_open(monkeypatch):
+    """没配访问码时本地/评测路径不受影响。"""
+    monkeypatch.setattr(config, "DEMO_TOKEN", "")
+    assert client.post("/ask", json={"question": "最近销售额怎么样"}).status_code == 200
+    assert client.get("/healthz").json()["auth_required"] is False
+
+
 def test_budget_breaker_blocks_when_spent(monkeypatch):
     monkeypatch.setattr(config, "DAILY_COST_BUDGET_CNY", 1.0)
     service.RUNTIME["cost_today"] = 1.5

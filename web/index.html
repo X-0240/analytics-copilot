@@ -17,6 +17,8 @@
           padding:16px; margin-bottom:14px; }
   textarea { width:100%; min-height:64px; padding:10px; font:inherit;
              border:1px solid var(--line); border-radius:8px; resize:vertical; }
+  input[type=password],input[type=text] { padding:7px 9px; font:inherit;
+             border:1px solid var(--line); border-radius:8px; }
   button { margin-top:10px; padding:9px 18px; font:inherit; color:#fff;
            background:var(--accent); border:0; border-radius:8px; cursor:pointer; }
   button[disabled] { opacity:.55; cursor:default; }
@@ -52,6 +54,10 @@
   <div class="card">
     <textarea id="q" placeholder="例如：最近三个月销售额为什么下降？按国家看"></textarea>
     <button id="go">分析</button>
+    <div id="authRow" class="note" style="display:none;margin-top:10px">
+      访问码：<input id="token" type="password" placeholder="Demo 访问码" size="18">
+      <span>（公网 Demo 用共享口令挡住未授权调用，不是账号）</span>
+    </div>
     <div class="note" style="margin-top:8px">
       演示数据集：UCI Online Retail（公开数据，2010-12 ~ 2011-12，无姓名与联系方式）。
       提问内容不会被保存原文，只记录长度与哈希；请勿输入真实业务数据。
@@ -71,9 +77,22 @@
 const out = document.getElementById('out');
 const q = document.getElementById('q');
 const go = document.getElementById('go');
+const tokenInput = document.getElementById('token');
 const sid = localStorage.getItem('ac_sid') ||
   (Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 localStorage.setItem('ac_sid', sid);
+tokenInput.value = localStorage.getItem('ac_token') || '';
+
+// 只有服务端要访问码时才显示输入框（本地直跑不带 token 的部署不受影响）
+fetch('/healthz').then(r => r.json()).then(h => {
+  if (h.auth_required) document.getElementById('authRow').style.display = 'block';
+}).catch(() => {});
+
+function authHeaders() {
+  const token = tokenInput.value.trim();
+  if (token) localStorage.setItem('ac_token', token);
+  return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
 
 function esc(text) {
   return String(text == null ? '' : text).replace(/[&<>]/g, c =>
@@ -119,6 +138,9 @@ function render(data) {
     return;
   }
   if (status !== 'answered') {
+    if (status === 'error' && data.code === 'UNAUTHORIZED') {
+      document.getElementById('authRow').style.display = 'block';
+    }
     out.innerHTML = `<div class="card"><div class="status error">
       ${esc(data.code || 'ERROR')}</div><p>${esc(data.message)}</p></div>`;
     return;
@@ -157,7 +179,8 @@ async function ask() {
   try {
     const resp = await fetch('/ask', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: Object.assign(
+        { 'Content-Type': 'application/json' }, authHeaders()),
       body: JSON.stringify({ question, session_id: sid })
     });
     render(await resp.json());

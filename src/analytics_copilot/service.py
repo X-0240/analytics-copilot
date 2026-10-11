@@ -14,6 +14,7 @@ M5 公网部署在 M0 骨架上补了四类防护（方案见 `docs/M5_部署方
 
 import asyncio
 import hashlib
+import hmac
 import json
 import time
 import uuid
@@ -41,6 +42,7 @@ COUNTERS = {
     "inflight_rejected": 0,
     "budget_blocked": 0,
     "body_too_large": 0,
+    "unauthorized": 0,
 }
 
 RUNTIME = {
@@ -153,6 +155,22 @@ def _rate_limited(ip):
         return True
     bucket.append(now)
     return False
+
+
+def _authorized(request):
+    """Demo 访问码校验。
+
+    未配置 `AC_DEMO_TOKEN` 时一律放行（本地直跑与评测默认如此）；
+    配置了就必须带 `Authorization: Bearer <token>`（也接受 `X-Demo-Token`）。
+    用 `compare_digest` 做定时比较，避免按字符比较泄漏长度与内容。
+    """
+    token = config.DEMO_TOKEN
+    if not token:
+        return True
+    header = request.headers.get("authorization", "")
+    if header[:7].lower() == "bearer ":
+        return hmac.compare_digest(header[7:].strip(), token)
+    return hmac.compare_digest(request.headers.get("x-demo-token", ""), token)
 
 
 def _prune_sessions():
@@ -288,6 +306,8 @@ def healthz():
         "db_rows": (meta.get("profile") or {}).get("rows"),
         "allowed_views": meta.get("allowed_views", []),
         "stub": config.FORCE_STUB,
+        # 只回"要不要访问码"，不回访问码本身
+        "auth_required": bool(config.DEMO_TOKEN),
     }
     if failed:
         return JSONResponse(status_code=503, content=body)
@@ -335,6 +355,17 @@ async def ask(payload: AskRequest, request: Request):
         _log(record)
         return _error(
             429, session_id, "RATE_LIMITED", "请求过于频繁，请稍后再试", request_id
+        )
+    if not _authorized(request):
+        COUNTERS["unauthorized"] += 1
+        record.update({"status": "unauthorized"})
+        _log(record)
+        return _error(
+            401,
+            session_id,
+            "UNAUTHORIZED",
+            "需要访问码：请在页面填写，或用 Authorization: Bearer <token> 调用",
+            request_id,
         )
     if RUNTIME["inflight"] >= config.MAX_INFLIGHT:
         COUNTERS["inflight_rejected"] += 1

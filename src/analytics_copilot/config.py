@@ -27,6 +27,11 @@ MAX_INFLIGHT = int(os.getenv("AC_MAX_INFLIGHT", "4"))
 SESSION_MAX = int(os.getenv("AC_SESSION_MAX", "1000"))
 SESSION_TTL_SECONDS = float(os.getenv("AC_SESSION_TTL_SECONDS", "1800"))
 
+# 公网 Demo 访问码：非空时 `/ask` 必须带 `Authorization: Bearer <token>`。
+# 这不是账号体系，只是一串共享口令，用来挡住"知道 URL 就能刷模型额度"。
+# 默认空 = 不校验（本地直跑、评测、测试都走这条）。
+DEMO_TOKEN = os.getenv("AC_DEMO_TOKEN", "")
+
 # 日志：按大小轮转；只留轮转后的前 N 个文件
 LOG_MAX_BYTES = int(os.getenv("AC_LOG_MAX_BYTES", "5242880"))
 LOG_BACKUPS = int(os.getenv("AC_LOG_BACKUPS", "3"))
